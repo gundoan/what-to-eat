@@ -24,6 +24,11 @@ spring:
     # Spring이 직접 내는 에러(잘못된 주소 등)도 우리 에러와 같은 ProblemDetail 형식으로 응답한다.
     problemdetails:
       enabled: true
+  task:
+    scheduling:
+      pool:
+        # 단계 타이머(1초마다)와 SSE 하트비트(25초마다)가 서로를 기다리지 않게 스레드를 2개 둔다.
+        size: 2
 
 app:
   participant-cookie:
