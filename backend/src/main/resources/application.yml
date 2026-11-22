@@ -15,3 +15,17 @@ spring:
       ddl-auto: validate
     # 켜두면 SSE처럼 오래 열린 요청이 끝날 때까지 DB 커넥션을 붙잡을 수 있어서 끈다.
     open-in-view: false
+    properties:
+      hibernate:
+        # 시각은 서버나 DB의 시간대 설정과 상관없이 UTC로 저장한다.
+        jdbc:
+          time_zone: UTC
+  mvc:
+    # Spring이 직접 내는 에러(잘못된 주소 등)도 우리 에러와 같은 ProblemDetail 형식으로 응답한다.
+    problemdetails:
+      enabled: true
+
+app:
+  participant-cookie:
+    # HTTPS에서만 쿠키를 보내게 하는 설정. 로컬(http)에서는 false, 배포(https)에서는 true로 넣는다.
+    secure: ${COOKIE_SECURE:false}
