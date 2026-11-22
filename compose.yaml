@@ -1,0 +1,25 @@
+# 로컬 개발용 MySQL. 값은 같은 폴더의 .env에서 읽는다.
+# 폴더 이름(뭐먹지)으로 프로젝트 이름을 만들면 한글이 빠져 빈 이름이 되므로 직접 정한다.
+name: what-to-eat
+
+services:
+  mysql:
+    image: mysql:9.7
+    environment:
+      MYSQL_DATABASE: ${DB_NAME}
+      MYSQL_USER: ${DB_USERNAME}
+      MYSQL_PASSWORD: ${DB_PASSWORD}
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
+    ports:
+      # 같은 와이파이의 다른 기기에서는 접속할 수 없게 이 PC(127.0.0.1)에만 연다.
+      - "127.0.0.1:${DB_PORT:-3306}:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "--silent"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+volumes:
+  mysql-data:
