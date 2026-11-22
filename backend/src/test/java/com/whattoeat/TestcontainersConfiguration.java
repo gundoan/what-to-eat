@@ -12,7 +12,8 @@ class TestcontainersConfiguration {
 	@Bean
 	@ServiceConnection
 	MySQLContainer mysqlContainer() {
-		return new MySQLContainer(DockerImageName.parse("mysql:latest"));
+		// latest는 시간이 지나면 버전이 바뀌므로, 로컬 compose.yaml·배포와 같은 버전으로 고정한다.
+		return new MySQLContainer(DockerImageName.parse("mysql:9.7"));
 	}
 
 }
