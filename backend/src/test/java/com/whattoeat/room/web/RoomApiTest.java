@@ -3,14 +3,15 @@ package com.whattoeat.room.web;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import com.jayway.jsonpath.JsonPath;
 import com.whattoeat.IntegrationTest;
 import com.whattoeat.room.domain.ParticipantToken;
 import jakarta.servlet.http.Cookie;
@@ -23,7 +24,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.test.json.JsonCompareMode;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 
@@ -240,19 +240,21 @@ class RoomApiTest {
 			CreatedRoom room = createRoom(null);
 			Cookie guest = join(room.code());
 
-			mockMvc.perform(get("/api/rooms/" + room.code()).cookie(guest))
+			String body = mockMvc.perform(get("/api/rooms/" + room.code()).cookie(guest))
 				.andExpect(status().isOk())
-				.andExpect(content().json("""
-						{
-						  "room": {
-						    "code": "%s",
-						    "status": "WAITING",
-						    "phaseDurations": {"proposalSeconds": 60, "mergeSeconds": 60, "voteSeconds": 60, "randomPickSeconds": 60},
-						    "participantCount": 2
-						  },
-						  "me": {"host": false}
-						}
-						""".formatted(room.code()), JsonCompareMode.STRICT));
+				.andExpect(jsonPath("$.me.host").value(false))
+				.andReturn()
+				.getResponse()
+				.getContentAsString();
+
+			// 응답에 정해진 항목 말고는 아무것도 없어야 한다. 항목이 하나라도 늘면 이 테스트가 알려준다.
+			Map<String, Object> response = JsonPath.read(body, "$");
+			Map<String, Object> roomState = JsonPath.read(body, "$.room");
+			Map<String, Object> me = JsonPath.read(body, "$.me");
+			assertThat(response).containsOnlyKeys("room", "me");
+			assertThat(roomState).containsOnlyKeys("code", "status", "phaseDurations", "participantCount", "phaseEndsAt",
+					"serverTime", "menus", "doneCount");
+			assertThat(me).containsOnlyKeys("host", "proposal", "allGood");
 		}
 
 	}

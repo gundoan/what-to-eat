@@ -8,7 +8,6 @@ import com.whattoeat.common.error.BusinessException;
 import com.whattoeat.common.error.ErrorCode;
 import com.whattoeat.room.application.RoomResults.CreatedRoom;
 import com.whattoeat.room.application.RoomResults.JoinResult;
-import com.whattoeat.room.application.RoomView.Me;
 import com.whattoeat.room.domain.Participant;
 import com.whattoeat.room.domain.ParticipantRepository;
 import com.whattoeat.room.domain.ParticipantToken;
@@ -29,14 +28,20 @@ public class RoomService {
 
 	private final ParticipantRepository participantRepository;
 
+	private final RoomAccess access;
+
+	private final RoomStateAssembler assembler;
+
 	private final ApplicationEventPublisher events;
 
 	private final Clock clock;
 
-	public RoomService(RoomRepository roomRepository, ParticipantRepository participantRepository,
-			ApplicationEventPublisher events, Clock clock) {
+	RoomService(RoomRepository roomRepository, ParticipantRepository participantRepository, RoomAccess access,
+			RoomStateAssembler assembler, ApplicationEventPublisher events, Clock clock) {
 		this.roomRepository = roomRepository;
 		this.participantRepository = participantRepository;
+		this.access = access;
+		this.assembler = assembler;
 		this.events = events;
 		this.clock = clock;
 	}
@@ -57,60 +62,33 @@ public class RoomService {
 	 */
 	@Transactional
 	public JoinResult join(String code, String rawToken) {
-		Room room = roomRepository.findByCodeForUpdate(code)
-			.orElseThrow(() -> new BusinessException(ErrorCode.ROOM_NOT_FOUND));
+		Room room = access.lock(code);
 
-		Optional<Participant> existing = findParticipant(room, rawToken);
+		Optional<Participant> existing = access.findParticipant(room, rawToken);
 		if (existing.isPresent()) {
-			return new JoinResult(toView(room, existing.get()), null);
+			return new JoinResult(assembler.view(room, existing.get()), null);
 		}
 
-		long participantCount = participantRepository.countByRoom(room);
-		if (room.isFull(participantCount)) {
+		if (room.isFull(participantRepository.countByRoom(room))) {
 			throw new BusinessException(ErrorCode.ROOM_FULL);
 		}
 
 		ParticipantToken token = ParticipantToken.generate();
-		participantRepository.save(Participant.guest(room, token.hash(), clock.instant()));
+		Participant guest = participantRepository.save(Participant.guest(room, token.hash(), clock.instant()));
 		events.publishEvent(new RoomChangedEvent(room.getCode()));
-
-		RoomView view = new RoomView(RoomState.of(room, participantCount + 1), new Me(false));
-		return new JoinResult(view, token.value());
+		return new JoinResult(assembler.view(room, guest), token.value());
 	}
 
 	@Transactional(readOnly = true)
 	public RoomView getRoom(String code, String rawToken) {
-		Room room = findRoom(code);
-		Participant me = findParticipant(room, rawToken)
-			.orElseThrow(() -> new BusinessException(ErrorCode.NOT_PARTICIPANT));
-		return toView(room, me);
+		Room room = access.find(code);
+		return assembler.view(room, access.requireParticipant(room, rawToken));
 	}
 
 	/** 이 방의 참여자가 아니면 예외를 던진다. SSE 연결처럼 응답 본문 없이 자격만 확인할 때 쓴다. */
 	@Transactional(readOnly = true)
 	public void verifyParticipant(String code, String rawToken) {
-		Room room = findRoom(code);
-		if (findParticipant(room, rawToken).isEmpty()) {
-			throw new BusinessException(ErrorCode.NOT_PARTICIPANT);
-		}
-	}
-
-	private Room findRoom(String code) {
-		return roomRepository.findByCode(code).orElseThrow(() -> new BusinessException(ErrorCode.ROOM_NOT_FOUND));
-	}
-
-	/** 토큰이 있어도 다른 방의 토큰이면 이 방의 참여자로 인정하지 않는다. */
-	private Optional<Participant> findParticipant(Room room, String rawToken) {
-		if (rawToken == null || rawToken.isBlank()) {
-			return Optional.empty();
-		}
-		return participantRepository.findByTokenHash(ParticipantToken.hash(rawToken))
-			.filter(participant -> participant.belongsTo(room));
-	}
-
-	private RoomView toView(Room room, Participant me) {
-		long participantCount = participantRepository.countByRoom(room);
-		return new RoomView(RoomState.of(room, participantCount), new Me(me.isHost()));
+		access.requireParticipant(access.find(code), rawToken);
 	}
 
 	private String newUniqueCode() {
