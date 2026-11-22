@@ -54,6 +54,32 @@ class RoomEventsTest {
 	}
 
 	@Test
+	@DisplayName("방장이 시작하면 제안 단계 상태를, 누가 메뉴를 내면 바뀐 메뉴 목록을 SSE로 받는다")
+	void receivesPhaseChangeAndMenus() throws Exception {
+		HttpResponse<String> created = post("/api/rooms", null);
+		String code = codeOf(created.body());
+		String hostCookie = cookieOf(created);
+		String guestCookie = cookieOf(post("/api/rooms/" + code + "/participants", null));
+
+		try (SseTestConnection events = SseTestConnection.open(http, uri("/api/rooms/" + code + "/events"),
+				guestCookie)) {
+			events.nextEventData(RoomEventBroadcaster.ROOM_EVENT, WAIT); // 연결 직후의 현재 상태
+
+			assertThat(send("POST", "/api/rooms/" + code + "/next-phase", hostCookie, "{\"from\": \"WAITING\"}")
+				.statusCode()).isEqualTo(200);
+			String started = events.nextEventData(RoomEventBroadcaster.ROOM_EVENT, WAIT);
+			assertThat(started).contains("\"status\":\"PROPOSING\"").contains("\"phaseEndsAt\":\"");
+
+			assertThat(send("PUT", "/api/rooms/" + code + "/me/proposal", hostCookie, "{\"menuName\": \"제육\"}")
+				.statusCode()).isEqualTo(200);
+			String proposed = events.nextEventData(RoomEventBroadcaster.ROOM_EVENT, WAIT);
+			assertThat(proposed).contains("\"menus\":[\"제육\"]").contains("\"doneCount\":1");
+			// 누가 냈는지는 SSE에도 없다.
+			assertThat(proposed).doesNotContain("\"proposal\"").doesNotContain("\"host\"");
+		}
+	}
+
+	@Test
 	@DisplayName("방 참여자가 아니면 SSE에 연결할 수 없다")
 	void rejectsNonParticipant() throws Exception {
 		String code = codeOf(post("/api/rooms", null).body());
@@ -75,6 +101,15 @@ class RoomEventsTest {
 			request.header("Cookie", cookie);
 		}
 		return http.send(request.build(), HttpResponse.BodyHandlers.ofString());
+	}
+
+	private HttpResponse<String> send(String method, String path, String cookie, String json) throws Exception {
+		return http.send(HttpRequest.newBuilder(uri(path))
+			.timeout(WAIT)
+			.header("Cookie", cookie)
+			.header("Content-Type", "application/json")
+			.method(method, HttpRequest.BodyPublishers.ofString(json))
+			.build(), HttpResponse.BodyHandlers.ofString());
 	}
 
 	private URI uri(String path) {
