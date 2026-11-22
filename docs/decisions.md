@@ -112,6 +112,8 @@
 - 8.4는 자료가 조금 더 많지만 지원이 먼저 끝난다. 쓰는 법은 거의 같다.
 - Innovation 버전은 다음 버전이 나올 때까지만 지원돼서 몇 달마다 바꿔야 한다.
 
+**결과**: 서버를 켜면 Flyway 12.11이 "MySQL 9.7은 Flyway가 검증한 버전(9.4)보다 새 버전"이라는 경고를 남긴다. 연결, 테이블 검사, 테스트는 모두 정상이라 그대로 쓴다. Flyway 쪽에서 문제가 생기면 8.4 LTS로 내리는 것을 다시 검토한다. 바꿀 곳은 `compose.yaml`과 `TestcontainersConfiguration.java`의 버전 두 곳이다.
+
 ---
 
 ## 6. 웹 방식: Spring MVC와 WebFlux
