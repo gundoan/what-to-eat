@@ -1,11 +1,16 @@
 import { useState } from 'react'
 import { Link, useParams } from 'react-router'
+import { AfterProposalPhase } from '../components/phases/AfterProposalPhase'
+import { ProposingPhase } from '../components/phases/ProposingPhase'
+import { WaitingPhase } from '../components/phases/WaitingPhase'
 import { useRoom, type RoomError } from '../hooks/useRoom'
 import type { RoomStatus } from '../types/room'
-import { formatDuration } from '../utils/duration'
 
 const STATUS_LABELS: Record<RoomStatus, string> = {
   WAITING: '대기 중',
+  PROPOSING: '메뉴 제안 중',
+  MERGING: '합치기 중',
+  RANDOM_PICK: '랜덤 선택',
 }
 
 const ERROR_MESSAGES: Record<RoomError, string> = {
@@ -16,7 +21,7 @@ const ERROR_MESSAGES: Record<RoomError, string> = {
 
 export function RoomPage() {
   const { code = '' } = useParams()
-  const screen = useRoom(code)
+  const { screen, actions, actionError } = useRoom(code)
 
   if (screen.phase === 'loading') {
     return <main>방에 들어가는 중...</main>
@@ -41,17 +46,17 @@ export function RoomPage() {
       </p>
       {me.host && <p className="badge">내가 방장이에요. 다른 사람에게는 보이지 않아요.</p>}
       {!connected && <p role="status">연결이 끊겨서 다시 연결하는 중이에요...</p>}
+      {actionError && <p role="alert">{actionError}</p>}
+
+      {room.status === 'WAITING' && (
+        <WaitingPhase me={me} phaseDurations={room.phaseDurations} onStart={actions.nextPhase} />
+      )}
+      {room.status === 'PROPOSING' && <ProposingPhase room={room} me={me} actions={actions} />}
+      {(room.status === 'MERGING' || room.status === 'RANDOM_PICK') && (
+        <AfterProposalPhase status={room.status} menus={room.menus} />
+      )}
 
       <CopyLinkButton />
-
-      <h2>단계별 시간</h2>
-      <ul>
-        <li>제안: {formatDuration(room.phaseDurations.proposalSeconds)}</li>
-        <li>합치기: {formatDuration(room.phaseDurations.mergeSeconds)}</li>
-        <li>투표: {formatDuration(room.phaseDurations.voteSeconds)}</li>
-        <li>랜덤 선택: {formatDuration(room.phaseDurations.randomPickSeconds)}</li>
-      </ul>
-      <p>방장이 시작하면 메뉴 제안이 시작돼요.</p>
     </main>
   )
 }
