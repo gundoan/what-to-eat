@@ -1,0 +1,29 @@
+# 비밀 정보: 실제 값은 깃에 올리지 않는다. 견본은 .env.example에 둔다.
+.env
+.env.*
+!.env.example
+
+# Claude Code 개인 설정
+.claude/settings.local.json
+
+# 백엔드 (Gradle)
+.gradle/
+build/
+out/
+
+# 프론트엔드 (Node, Vite)
+node_modules/
+dist/
+*.local
+
+# IDE
+.idea/
+*.iml
+.vscode/*
+!.vscode/extensions.json
+
+# 로그, OS
+*.log
+logs/
+.DS_Store
+Thumbs.db
