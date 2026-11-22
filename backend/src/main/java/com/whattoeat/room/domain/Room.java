@@ -40,6 +40,12 @@ public class Room {
 	@Column(nullable = false, updatable = false)
 	private Instant createdAt;
 
+	/** 지금 단계가 시작된 시각. 대기 중에는 비어 있다. */
+	private Instant phaseStartedAt;
+
+	/** 지금 단계가 끝나는 시각. 시간 제한이 없는 단계에서는 비어 있다. */
+	private Instant phaseEndsAt;
+
 	protected Room() {
 	}
 
@@ -56,6 +62,34 @@ public class Room {
 
 	public boolean isFull(long participantCount) {
 		return participantCount >= MAX_PARTICIPANTS;
+	}
+
+	/** 대기 중 → 제안 중. 방장이 정한 제안 시간만큼 타이머를 건다. */
+	public void startProposal(Instant now) {
+		requireStatus(RoomStatus.WAITING);
+		this.status = RoomStatus.PROPOSING;
+		this.phaseStartedAt = now;
+		this.phaseEndsAt = now.plusSeconds(phaseDurations.proposalSeconds());
+	}
+
+	/** 제안 중 → 메뉴가 하나라도 있으면 합치기 중, 아무도 제안하지 않았으면 랜덤 선택. */
+	public void finishProposal(boolean anyMenuProposed, Instant now) {
+		requireStatus(RoomStatus.PROPOSING);
+		this.status = anyMenuProposed ? RoomStatus.MERGING : RoomStatus.RANDOM_PICK;
+		this.phaseStartedAt = now;
+		// 합치기와 랜덤 선택에도 시간 제한이 있지만, 그 단계의 동작을 만드는 기능 3·5에서 타이머를 건다.
+		this.phaseEndsAt = null;
+	}
+
+	public boolean isPhaseExpired(Instant now) {
+		return phaseEndsAt != null && !now.isBefore(phaseEndsAt);
+	}
+
+	private void requireStatus(RoomStatus expected) {
+		if (status != expected) {
+			// 서비스가 단계를 확인한 뒤에 부르므로, 여기에 걸리면 코드의 실수다.
+			throw new IllegalStateException("방 " + code + "은 " + expected + " 단계가 아니라 " + status + " 단계다");
+		}
 	}
 
 	public Long getId() {
@@ -76,6 +110,14 @@ public class Room {
 
 	public Instant getCreatedAt() {
 		return createdAt;
+	}
+
+	public Instant getPhaseStartedAt() {
+		return phaseStartedAt;
+	}
+
+	public Instant getPhaseEndsAt() {
+		return phaseEndsAt;
 	}
 
 }
