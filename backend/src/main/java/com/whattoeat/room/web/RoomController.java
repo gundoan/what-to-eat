@@ -2,11 +2,15 @@ package com.whattoeat.room.web;
 
 import java.net.URI;
 
+import com.whattoeat.common.error.BusinessException;
+import com.whattoeat.common.error.ErrorCode;
+import com.whattoeat.room.application.RoomPhaseService;
 import com.whattoeat.room.application.RoomResults.CreatedRoom;
 import com.whattoeat.room.application.RoomResults.JoinResult;
 import com.whattoeat.room.application.RoomService;
 import com.whattoeat.room.application.RoomView;
 import com.whattoeat.room.domain.PhaseDurations;
+import com.whattoeat.room.domain.RoomStatus;
 import com.whattoeat.room.sse.RoomEventBroadcaster;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
@@ -27,13 +31,16 @@ public class RoomController {
 
 	private final RoomService roomService;
 
+	private final RoomPhaseService phaseService;
+
 	private final RoomEventBroadcaster broadcaster;
 
 	private final ParticipantCookie participantCookie;
 
-	public RoomController(RoomService roomService, RoomEventBroadcaster broadcaster,
+	public RoomController(RoomService roomService, RoomPhaseService phaseService, RoomEventBroadcaster broadcaster,
 			ParticipantCookie participantCookie) {
 		this.roomService = roomService;
+		this.phaseService = phaseService;
 		this.broadcaster = broadcaster;
 		this.participantCookie = participantCookie;
 	}
@@ -67,6 +74,20 @@ public class RoomController {
 		return roomService.getRoom(code, token);
 	}
 
+	/**
+	 * 방장의 "시작"(대기 중일 때)과 "다음 단계로"(그 밖의 단계).
+	 * from에 방장 화면에 보이던 단계를 보내야 한다. 이미 넘어갔으면 409로 거절해서 두 번 눌러도 한 단계만 넘어간다.
+	 */
+	@PostMapping("/{code}/next-phase")
+	public RoomView nextPhase(@PathVariable String code,
+			@CookieValue(name = ParticipantCookie.NAME, required = false) String token,
+			@RequestBody NextPhaseRequest request) {
+		if (request.from() == null) {
+			throw new BusinessException(ErrorCode.INVALID_REQUEST);
+		}
+		return phaseService.advanceByHost(code, token, request.from());
+	}
+
 	/** SSE 연결. 연결하면 현재 방 상태를 바로 받고, 이후 방 상태가 바뀔 때마다 받는다. */
 	@GetMapping(path = "/{code}/events", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
 	public SseEmitter events(@PathVariable String code,
@@ -76,6 +97,9 @@ public class RoomController {
 	}
 
 	public record CreateRoomResponse(String code) {
+	}
+
+	public record NextPhaseRequest(RoomStatus from) {
 	}
 
 }

@@ -2,7 +2,6 @@ package com.whattoeat.room.application;
 
 import java.util.Optional;
 
-import com.whattoeat.room.domain.ParticipantRepository;
 import com.whattoeat.room.domain.RoomRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
@@ -16,11 +15,11 @@ public class RoomStateReader {
 
 	private final RoomRepository roomRepository;
 
-	private final ParticipantRepository participantRepository;
+	private final RoomStateAssembler assembler;
 
-	public RoomStateReader(RoomRepository roomRepository, ParticipantRepository participantRepository) {
+	RoomStateReader(RoomRepository roomRepository, RoomStateAssembler assembler) {
 		this.roomRepository = roomRepository;
-		this.participantRepository = participantRepository;
+		this.assembler = assembler;
 	}
 
 	/**
@@ -28,8 +27,7 @@ public class RoomStateReader {
 	 */
 	@Transactional(readOnly = true, propagation = Propagation.REQUIRES_NEW)
 	public Optional<RoomState> read(String code) {
-		return roomRepository.findByCode(code)
-			.map(room -> RoomState.of(room, participantRepository.countByRoom(room)));
+		return roomRepository.findByCode(code).map(assembler::state);
 	}
 
 }

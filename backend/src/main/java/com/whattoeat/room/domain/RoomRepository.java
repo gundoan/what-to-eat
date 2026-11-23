@@ -1,5 +1,7 @@
 package com.whattoeat.room.domain;
 
+import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 
 import jakarta.persistence.LockModeType;
@@ -20,5 +22,9 @@ public interface RoomRepository extends JpaRepository<Room, Long> {
 	@Lock(LockModeType.PESSIMISTIC_WRITE)
 	@Query("select r from Room r where r.code = :code")
 	Optional<Room> findByCodeForUpdate(String code);
+
+	/** 지금 단계의 시간이 다 된 방들. 잠그지 않고 읽으므로, 넘기기 전에 잠근 상태에서 한 번 더 확인해야 한다. */
+	@Query("select r.code from Room r where r.phaseEndsAt <= :now")
+	List<String> findCodesWithPhaseEndingBy(Instant now);
 
 }

@@ -1,5 +1,5 @@
 import { request } from './client'
-import type { PhaseDurations, RoomState, RoomView } from '../types/room'
+import type { PhaseDurations, RoomState, RoomStatus, RoomView } from '../types/room'
 
 export function createRoom(durations: PhaseDurations): Promise<{ code: string }> {
   return request('/api/rooms', { method: 'POST', body: JSON.stringify(durations) })
@@ -14,10 +14,29 @@ export function joinRoom(code: string): Promise<RoomView> {
   if (pending) {
     return pending
   }
-  const join = request<RoomView>(`/api/rooms/${encodeURIComponent(code)}/participants`, { method: 'POST' })
-    .finally(() => pendingJoins.delete(code))
+  const join = request<RoomView>(`${roomPath(code)}/participants`, { method: 'POST' }).finally(() =>
+    pendingJoins.delete(code),
+  )
   pendingJoins.set(code, join)
   return join
+}
+
+export function getRoom(code: string): Promise<RoomView> {
+  return request(roomPath(code))
+}
+
+/** 방장의 "시작"과 "다음 단계로". from에는 화면에 보이던 단계를 보내서, 두 번 눌러도 한 단계만 넘어가게 한다. */
+export function nextPhase(code: string, from: RoomStatus): Promise<RoomView> {
+  return request(`${roomPath(code)}/next-phase`, { method: 'POST', body: JSON.stringify({ from }) })
+}
+
+export function propose(code: string, menuName: string): Promise<RoomView> {
+  return request(`${roomPath(code)}/me/proposal`, { method: 'PUT', body: JSON.stringify({ menuName }) })
+}
+
+/** "다 좋음". 이미 낸 메뉴가 있으면 취소된다. */
+export function allGood(code: string): Promise<RoomView> {
+  return request(`${roomPath(code)}/me/all-good`, { method: 'POST' })
 }
 
 type RoomEventHandlers = {
@@ -30,11 +49,15 @@ type RoomEventHandlers = {
  * 다시 연결되면 서버가 현재 상태를 바로 보내준다. 돌려준 함수를 부르면 연결을 닫는다.
  */
 export function subscribeRoom(code: string, handlers: RoomEventHandlers): () => void {
-  const source = new EventSource(`/api/rooms/${encodeURIComponent(code)}/events`)
+  const source = new EventSource(`${roomPath(code)}/events`)
   source.addEventListener('room', (event) => {
     handlers.onState(JSON.parse((event as MessageEvent<string>).data) as RoomState)
   })
   source.onopen = () => handlers.onConnectionChange(true)
   source.onerror = () => handlers.onConnectionChange(false)
   return () => source.close()
+}
+
+function roomPath(code: string): string {
+  return `/api/rooms/${encodeURIComponent(code)}`
 }

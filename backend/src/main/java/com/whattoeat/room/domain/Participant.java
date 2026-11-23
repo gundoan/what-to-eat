@@ -37,6 +37,10 @@ public class Participant {
 	@Column(nullable = false, updatable = false)
 	private Instant joinedAt;
 
+	/** 제안 단계에서 "다 좋음"을 눌렀는지. 메뉴를 냈거나 이 값이 참이면 제안 단계를 끝낸 것이다. */
+	@Column(nullable = false)
+	private boolean proposalAllGood;
+
 	protected Participant() {
 	}
 
@@ -57,6 +61,18 @@ public class Participant {
 
 	public boolean belongsTo(Room other) {
 		return Objects.equals(room.getId(), other.getId());
+	}
+
+	public void markProposalAllGood() {
+		this.proposalAllGood = true;
+	}
+
+	public void clearProposalAllGood() {
+		this.proposalAllGood = false;
+	}
+
+	public boolean isProposalAllGood() {
+		return proposalAllGood;
 	}
 
 	public Long getId() {
