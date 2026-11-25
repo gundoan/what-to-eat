@@ -1,7 +1,9 @@
 import { useState } from 'react'
 import { Link, useParams } from 'react-router'
-import { AfterProposalPhase } from '../components/phases/AfterProposalPhase'
+import { MergingPhase } from '../components/phases/MergingPhase'
 import { ProposingPhase } from '../components/phases/ProposingPhase'
+import { RandomPickPhase } from '../components/phases/RandomPickPhase'
+import { VotingPhase } from '../components/phases/VotingPhase'
 import { WaitingPhase } from '../components/phases/WaitingPhase'
 import { useRoom, type RoomError } from '../hooks/useRoom'
 import type { RoomStatus } from '../types/room'
@@ -10,6 +12,7 @@ const STATUS_LABELS: Record<RoomStatus, string> = {
   WAITING: '대기 중',
   PROPOSING: '메뉴 제안 중',
   MERGING: '합치기 중',
+  VOTING: '투표 중',
   RANDOM_PICK: '랜덤 선택',
 }
 
@@ -52,9 +55,9 @@ export function RoomPage() {
         <WaitingPhase me={me} phaseDurations={room.phaseDurations} onStart={actions.nextPhase} />
       )}
       {room.status === 'PROPOSING' && <ProposingPhase room={room} me={me} actions={actions} />}
-      {(room.status === 'MERGING' || room.status === 'RANDOM_PICK') && (
-        <AfterProposalPhase status={room.status} menus={room.menus} />
-      )}
+      {room.status === 'MERGING' && <MergingPhase room={room} me={me} actions={actions} />}
+      {room.status === 'VOTING' && <VotingPhase menus={room.menus} myMenuId={me.menuId} />}
+      {room.status === 'RANDOM_PICK' && <RandomPickPhase />}
 
       <CopyLinkButton />
     </main>

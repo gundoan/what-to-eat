@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { allGood, getRoom, joinRoom, nextPhase, propose, subscribeRoom } from '../api/rooms'
+import { allGood, answerMerge, finishMerge, joinRoom, nextPhase, propose, subscribeRoom } from '../api/rooms'
 import { ApiError } from '../api/client'
 import type { Me, RoomState, RoomView } from '../types/room'
 
@@ -23,13 +23,17 @@ export type RoomActions = {
   nextPhase: () => void
   propose: (menuName: string) => void
   allGood: () => void
+  /** 합치기 질문에 답한다. agree가 true면 합치기 */
+  answerMerge: (groupId: string, agree: boolean) => void
+  /** "합치기 끝냄" */
+  finishMerge: () => void
 }
 
 /**
  * 방 화면의 로직.
  * 1) 링크로 들어오면 참여한다(이미 참여한 브라우저면 같은 참여자로 돌아온다).
- * 2) SSE로 연결해서 방 상태가 바뀔 때마다 화면을 갱신한다.
- * 3) 시작, 제안, "다 좋음" 같은 행동을 서버에 보낸다.
+ * 2) SSE로 연결해서 방 상태나 내 정보가 바뀔 때마다 화면을 갱신한다.
+ * 3) 시작, 제안, "다 좋음", 합치기 답 같은 행동을 서버에 보낸다.
  */
 export function useRoom(code: string) {
   const [screen, setScreen] = useState<RoomScreen>({ phase: 'loading' })
@@ -44,19 +48,11 @@ export function useRoom(code: string) {
         if (closed) return
         setScreen(withView(view))
         unsubscribe = subscribeRoom(code, {
-          onState: (state) =>
-            setScreen((current) => (current.phase === 'ready' ? { ...current, room: newer(current.room, state) } : current)),
-          onConnectionChange: (connected) => {
-            setScreen((current) => (current.phase === 'ready' ? { ...current, connected } : current))
-            // 다시 연결되면 내 정보(me)도 다시 받는다. 다른 탭에서 바꿨을 수 있다.
-            if (connected) {
-              getRoom(code)
-                .then((latest) => {
-                  if (!closed) setScreen(withView(latest))
-                })
-                .catch(() => {})
-            }
-          },
+          // SSE에는 방 상태와 내 정보가 함께 온다. 다른 사람의 행동으로 내 정보가 바뀌어도(내 메뉴가 합쳐짐 등) 바로 보인다.
+          // 다시 연결될 때도 서버가 지금 화면 정보를 먼저 보내주므로, 따로 다시 불러올 필요가 없다.
+          onView: (latest) => setScreen(withView(latest)),
+          onConnectionChange: (connected) =>
+            setScreen((current) => (current.phase === 'ready' ? { ...current, connected } : current)),
         })
       })
       .catch((e: unknown) => {
@@ -84,6 +80,8 @@ export function useRoom(code: string) {
     },
     propose: (menuName) => void run(() => propose(code, menuName)),
     allGood: () => void run(() => allGood(code)),
+    answerMerge: (groupId, agree) => void run(() => answerMerge(code, groupId, agree)),
+    finishMerge: () => void run(() => finishMerge(code)),
   }
 
   return { screen, actions, actionError }
@@ -100,26 +98,25 @@ function toSnapshot(state: RoomState): RoomSnapshot {
   return { ...state, localDeadline, receivedAt: now }
 }
 
-/**
- * HTTP 응답과 SSE 이벤트는 도착 순서가 바뀔 수 있다. 서버 시각이 더 늦은(더 최신인) 상태만 반영해서
- * 오래된 상태가 화면을 덮어쓰지 않게 한다.
- */
-function newer(current: RoomSnapshot, next: RoomState): RoomSnapshot {
-  return Date.parse(next.serverTime) >= Date.parse(current.serverTime) ? toSnapshot(next) : current
-}
-
 function toRoomError(e: unknown): RoomError {
   if (e instanceof ApiError && e.code === 'ROOM_NOT_FOUND') return 'NOT_FOUND'
   if (e instanceof ApiError && e.code === 'ROOM_FULL') return 'FULL'
   return 'UNKNOWN'
 }
 
-/** 서버가 돌려준 방 화면 정보(RoomView)를 반영하는 상태 변경 함수를 만든다. */
+/**
+ * 서버가 보낸 화면 정보(RoomView)를 반영하는 상태 변경 함수를 만든다.
+ * HTTP 응답과 SSE 이벤트는 도착 순서가 바뀔 수 있어서, 서버 시각이 더 늦은(더 최신인) 정보만 반영한다.
+ * 방 상태와 내 정보는 같은 순간에 만들어진 것이라 함께 반영한다.
+ */
 function withView(view: RoomView): (current: RoomScreen) => RoomScreen {
   return (current) => {
     if (current.phase !== 'ready') {
       return { phase: 'ready', room: toSnapshot(view.room), me: view.me, connected: true }
     }
-    return { ...current, room: newer(current.room, view.room), me: view.me }
+    if (Date.parse(view.room.serverTime) < Date.parse(current.room.serverTime)) {
+      return current
+    }
+    return { ...current, room: toSnapshot(view.room), me: view.me }
   }
 }

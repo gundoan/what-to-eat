@@ -52,6 +52,24 @@ input {
   font-size: 1.5rem;
 }
 
-.menu-list {
+.menu-list,
+.merge-groups {
   padding-left: 20px;
+}
+
+.mine,
+.hint {
+  opacity: 0.7;
+}
+
+.card {
+  margin: 16px 0;
+  padding: 12px 16px;
+  border: 1px solid currentColor;
+  border-radius: 8px;
+}
+
+.buttons {
+  display: flex;
+  gap: 8px;
 }

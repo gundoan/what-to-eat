@@ -1,5 +1,5 @@
 import { request } from './client'
-import type { PhaseDurations, RoomState, RoomStatus, RoomView } from '../types/room'
+import type { PhaseDurations, RoomStatus, RoomView } from '../types/room'
 
 export function createRoom(durations: PhaseDurations): Promise<{ code: string }> {
   return request('/api/rooms', { method: 'POST', body: JSON.stringify(durations) })
@@ -39,19 +39,32 @@ export function allGood(code: string): Promise<RoomView> {
   return request(`${roomPath(code)}/me/all-good`, { method: 'POST' })
 }
 
+/** 합치기 질문에 답한다(agree가 true면 합치기). 한 번 답하면 바꿀 수 없다. */
+export function answerMerge(code: string, groupId: string, agree: boolean): Promise<RoomView> {
+  return request(`${roomPath(code)}/me/merge-answers/${encodeURIComponent(groupId)}`, {
+    method: 'PUT',
+    body: JSON.stringify({ agree }),
+  })
+}
+
+/** "합치기 끝냄". 답하지 않은 질문은 "합치지 않기"로 처리된다. */
+export function finishMerge(code: string): Promise<RoomView> {
+  return request(`${roomPath(code)}/me/merge-done`, { method: 'POST' })
+}
+
 type RoomEventHandlers = {
-  onState: (state: RoomState) => void
+  onView: (view: RoomView) => void
   onConnectionChange: (connected: boolean) => void
 }
 
 /**
- * SSE로 방 상태를 받는다. 연결이 끊기면 브라우저(EventSource)가 알아서 다시 연결하고,
- * 다시 연결되면 서버가 현재 상태를 바로 보내준다. 돌려준 함수를 부르면 연결을 닫는다.
+ * SSE로 화면 정보(방 상태 + 내 정보)를 받는다. 연결이 끊기면 브라우저(EventSource)가 알아서 다시 연결하고,
+ * 다시 연결되면 서버가 현재 화면 정보를 바로 보내준다. 돌려준 함수를 부르면 연결을 닫는다.
  */
 export function subscribeRoom(code: string, handlers: RoomEventHandlers): () => void {
   const source = new EventSource(`${roomPath(code)}/events`)
   source.addEventListener('room', (event) => {
-    handlers.onState(JSON.parse((event as MessageEvent<string>).data) as RoomState)
+    handlers.onView(JSON.parse((event as MessageEvent<string>).data) as RoomView)
   })
   source.onopen = () => handlers.onConnectionChange(true)
   source.onerror = () => handlers.onConnectionChange(false)
