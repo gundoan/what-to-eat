@@ -1,15 +1,11 @@
 package com.whattoeat.room.application;
 
+import static com.whattoeat.room.application.Concurrently.runAllAtOnce;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.Callable;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import com.whattoeat.IntegrationTest;
@@ -94,31 +90,6 @@ class ProposalConcurrencyTest {
 		assertThat(rejected).hasValue(1);
 		assertThat(roomRepository.findByCode(created.code()).orElseThrow().getStatus())
 			.isEqualTo(RoomStatus.PROPOSING);
-	}
-
-	/** 모든 작업을 출발선에 세웠다가 한꺼번에 출발시키고, 모두 끝날 때까지 기다린다. */
-	private static void runAllAtOnce(List<Callable<Void>> tasks) throws Exception {
-		CountDownLatch ready = new CountDownLatch(tasks.size());
-		CountDownLatch start = new CountDownLatch(1);
-		ExecutorService pool = Executors.newFixedThreadPool(tasks.size());
-		try {
-			List<Future<Void>> results = new ArrayList<>();
-			for (Callable<Void> task : tasks) {
-				results.add(pool.submit(() -> {
-					ready.countDown();
-					start.await();
-					return task.call();
-				}));
-			}
-			ready.await();
-			start.countDown();
-			for (Future<Void> result : results) {
-				result.get(60, TimeUnit.SECONDS);
-			}
-		}
-		finally {
-			pool.shutdownNow();
-		}
 	}
 
 }
