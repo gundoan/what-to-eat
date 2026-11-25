@@ -41,6 +41,10 @@ public class Participant {
 	@Column(nullable = false)
 	private boolean proposalAllGood;
 
+	/** 합치기 단계에서 "합치기 끝냄"을 눌렀는지. */
+	@Column(nullable = false)
+	private boolean mergeDone;
+
 	protected Participant() {
 	}
 
@@ -73,6 +77,30 @@ public class Participant {
 
 	public boolean isProposalAllGood() {
 		return proposalAllGood;
+	}
+
+	public void markMergeDone() {
+		this.mergeDone = true;
+	}
+
+	public boolean isMergeDone() {
+		return mergeDone;
+	}
+
+	/**
+	 * 지금 단계에서 할 일을 끝냈는지. "N명 중 M명 끝냄"과 "모두 끝내면 바로 다음 단계로"가 모두 이 기준 하나를 쓴다.
+	 *
+	 * @param myMenu 이 참여자가 낸 메뉴. 내지 않았으면 null
+	 */
+	public boolean hasFinished(RoomStatus phase, Menu myMenu) {
+		return switch (phase) {
+			// 메뉴를 냈거나 "다 좋음"을 눌렀다.
+			case PROPOSING -> myMenu != null || proposalAllGood;
+			// "합치기 끝냄"을 눌렀거나, 합칠 메뉴가 없다(제안하지 않았거나, 메뉴가 합쳐져서 사라졌다).
+			case MERGING -> mergeDone || myMenu == null || myMenu.isMerged();
+			// 대기 중은 방장의 "시작"으로만 넘어가고, 투표와 랜덤 선택은 기능 4·5에서 정한다.
+			case WAITING, VOTING, RANDOM_PICK -> false;
+		};
 	}
 
 	public Long getId() {
