@@ -85,10 +85,13 @@ public class RoomService {
 		return assembler.view(room, access.requireParticipant(room, rawToken));
 	}
 
-	/** 이 방의 참여자가 아니면 예외를 던진다. SSE 연결처럼 응답 본문 없이 자격만 확인할 때 쓴다. */
+	/**
+	 * 이 방의 참여자인지 확인하고, 참여자 번호를 돌려준다. 참여자가 아니면 예외를 던진다.
+	 * SSE 연결처럼 응답 본문 없이 자격만 확인할 때 쓴다. 참여자 번호는 서버 안에서만 쓰고 화면에 내보내지 않는다.
+	 */
 	@Transactional(readOnly = true)
-	public void verifyParticipant(String code, String rawToken) {
-		access.requireParticipant(access.find(code), rawToken);
+	public long verifyParticipant(String code, String rawToken) {
+		return access.requireParticipant(access.find(code), rawToken).getId();
 	}
 
 	private String newUniqueCode() {

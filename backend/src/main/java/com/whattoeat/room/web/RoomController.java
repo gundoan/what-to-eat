@@ -88,12 +88,15 @@ public class RoomController {
 		return phaseService.advanceByHost(code, token, request.from());
 	}
 
-	/** SSE 연결. 연결하면 현재 방 상태를 바로 받고, 이후 방 상태가 바뀔 때마다 받는다. */
+	/**
+	 * SSE 연결. 연결하면 현재 화면 정보(방 상태 + 내 정보)를 바로 받고, 이후 방 상태가 바뀔 때마다 받는다.
+	 * 내 정보는 쿠키로 확인한 본인 것만 온다.
+	 */
 	@GetMapping(path = "/{code}/events", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
 	public SseEmitter events(@PathVariable String code,
 			@CookieValue(name = ParticipantCookie.NAME, required = false) String token) {
-		roomService.verifyParticipant(code, token);
-		return broadcaster.subscribe(code);
+		long participantId = roomService.verifyParticipant(code, token);
+		return broadcaster.subscribe(code, participantId);
 	}
 
 	public record CreateRoomResponse(String code) {
