@@ -73,7 +73,7 @@ class RoomEventsTest {
 			assertThat(send("PUT", "/api/rooms/" + code + "/me/proposal", hostCookie, "{\"menuName\": \"제육\"}")
 				.statusCode()).isEqualTo(200);
 			String proposed = events.nextEventData(RoomEventBroadcaster.ROOM_EVENT, WAIT);
-			assertThat(proposed).contains("\"menus\":[\"제육\"]").contains("\"doneCount\":1");
+			assertThat(proposed).contains("\"name\":\"제육\"").contains("\"doneCount\":1");
 			// 누가 냈는지는 SSE에도 없다.
 			assertThat(proposed).doesNotContain("\"proposal\"").doesNotContain("\"host\"");
 		}

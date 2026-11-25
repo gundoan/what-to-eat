@@ -10,13 +10,13 @@ public interface MenuRepository extends JpaRepository<Menu, Long> {
 
 	Optional<Menu> findByParticipant(Participant participant);
 
-	boolean existsByRoom(Room room);
+	long countByRoom(Room room);
 
 	/**
-	 * 메뉴 이름만 가나다순으로 읽는다. 올라온 순서대로 보여주면 누가 냈는지 짐작할 수 있어서다.
-	 * 누가 냈는지(participant)는 읽지 않는다.
+	 * 방의 메뉴를 합쳐진 것까지 모두 가나다순으로 읽는다. 올라온 순서대로 보여주면 누가 냈는지 짐작할 수 있어서다.
+	 * 이름이 같으면 무작위 공개 번호 순이라, 같은 이름끼리의 순서도 올라온 순서와 상관없다.
 	 */
-	@Query("select m.name from Menu m where m.room = :room order by m.name")
-	List<String> findNamesByRoom(Room room);
+	@Query("select m from Menu m where m.room = :room order by m.name, m.publicId")
+	List<Menu> findSortedByRoom(Room room);
 
 }

@@ -2,10 +2,12 @@ package com.whattoeat.room.application;
 
 import java.time.Clock;
 import java.time.Instant;
+import java.util.Map;
 import java.util.Optional;
 
 import com.whattoeat.common.error.BusinessException;
 import com.whattoeat.common.error.ErrorCode;
+import com.whattoeat.room.domain.Menu;
 import com.whattoeat.room.domain.MenuRepository;
 import com.whattoeat.room.domain.Participant;
 import com.whattoeat.room.domain.ParticipantRepository;
@@ -39,6 +41,8 @@ public class RoomPhaseService {
 
 	private final MenuRepository menuRepository;
 
+	private final MergePhase mergePhase;
+
 	private final RoomAccess access;
 
 	private final RoomStateAssembler assembler;
@@ -50,11 +54,12 @@ public class RoomPhaseService {
 	private final Clock clock;
 
 	RoomPhaseService(RoomRepository roomRepository, ParticipantRepository participantRepository,
-			MenuRepository menuRepository, RoomAccess access, RoomStateAssembler assembler,
+			MenuRepository menuRepository, MergePhase mergePhase, RoomAccess access, RoomStateAssembler assembler,
 			ApplicationEventPublisher events, TransactionTemplate transactionTemplate, Clock clock) {
 		this.roomRepository = roomRepository;
 		this.participantRepository = participantRepository;
 		this.menuRepository = menuRepository;
+		this.mergePhase = mergePhase;
 		this.access = access;
 		this.assembler = assembler;
 		this.events = events;
@@ -109,19 +114,29 @@ public class RoomPhaseService {
 	 * @return 넘겼는지
 	 */
 	boolean advanceIfAllDone(Room room, Instant now) {
-		if (room.getStatus() != RoomStatus.PROPOSING) {
-			return false;
-		}
-		if (participantRepository.countProposalDone(room) < participantRepository.countByRoom(room)) {
+		if (!isEveryoneFinished(room)) {
 			return false;
 		}
 		moveToNextPhase(room, now);
 		return true;
 	}
 
+	/** "끝냈다"의 기준은 단계마다 다르고, {@link Participant#hasFinished}에 한곳으로 모여 있다. */
+	private boolean isEveryoneFinished(Room room) {
+		// 대기 중은 방장의 "시작"으로만 넘어가고, 투표와 랜덤 선택은 기능 4·5에서 만든다.
+		if (room.getStatus() != RoomStatus.PROPOSING && room.getStatus() != RoomStatus.MERGING) {
+			return false;
+		}
+		Map<Long, Menu> menuByParticipantId = Menu.byParticipantId(menuRepository.findSortedByRoom(room));
+		return participantRepository.findByRoom(room)
+			.stream()
+			.allMatch(participant -> participant.hasFinished(room.getStatus(),
+					menuByParticipantId.get(participant.getId())));
+	}
+
 	private boolean advanceIfExpired(String code, Instant now) {
 		Optional<Room> locked = roomRepository.findByCodeForUpdate(code);
-		// 잠그기 전에 방장이나 마지막 제안이 이미 넘겼을 수 있으므로, 잠근 뒤에 다시 확인한다.
+		// 잠그기 전에 방장이나 마지막으로 끝낸 사람이 이미 넘겼을 수 있으므로, 잠근 뒤에 다시 확인한다.
 		if (locked.isEmpty() || !locked.get().isPhaseExpired(now)) {
 			return false;
 		}
@@ -133,9 +148,18 @@ public class RoomPhaseService {
 	private void moveToNextPhase(Room room, Instant now) {
 		switch (room.getStatus()) {
 			case WAITING -> room.startProposal(now);
-			case PROPOSING -> room.finishProposal(menuRepository.existsByRoom(room), now);
-			// 합치기와 랜덤 선택의 다음 단계는 기능 3·5에서 만든다.
-			case MERGING, RANDOM_PICK -> throw new BusinessException(ErrorCode.NO_NEXT_PHASE);
+			case PROPOSING -> {
+				room.finishProposal(menuRepository.countByRoom(room), now);
+				if (room.getStatus() == RoomStatus.MERGING) {
+					mergePhase.open(room, now);
+				}
+			}
+			case MERGING -> {
+				mergePhase.close(room, now);
+				room.finishMerging(now);
+			}
+			// 투표와 랜덤 선택의 다음 단계는 기능 4·5에서 만든다.
+			case VOTING, RANDOM_PICK -> throw new BusinessException(ErrorCode.NO_NEXT_PHASE);
 		}
 	}
 

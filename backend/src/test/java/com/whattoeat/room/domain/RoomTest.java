@@ -35,17 +35,42 @@ class RoomTest {
 	}
 
 	@Test
-	@DisplayName("제안이 끝날 때 메뉴가 있으면 합치기, 없으면 랜덤 선택으로 간다")
-	void finishProposalChoosesNextPhase() {
-		Room withMenus = proposingRoom();
-		Room withoutMenus = proposingRoom();
+	@DisplayName("제안이 끝날 때 메뉴가 2개 이상이면 합치기 단계가 되고, 방장이 정한 합치기 시간 뒤에 끝난다")
+	void finishProposalWithMenusStartsMerging() {
+		Room room = Room.create("abcdefghij", PhaseDurations.of(null, 120, null, null), START.minusSeconds(10));
+		room.startProposal(START);
+		Instant finishedAt = START.plusSeconds(5);
 
-		withMenus.finishProposal(true, START.plusSeconds(5));
-		withoutMenus.finishProposal(false, START.plusSeconds(5));
+		room.finishProposal(2, finishedAt);
 
-		assertThat(withMenus.getStatus()).isEqualTo(RoomStatus.MERGING);
-		assertThat(withoutMenus.getStatus()).isEqualTo(RoomStatus.RANDOM_PICK);
-		assertThat(withMenus.getPhaseEndsAt()).isNull();
+		assertThat(room.getStatus()).isEqualTo(RoomStatus.MERGING);
+		assertThat(room.getPhaseStartedAt()).isEqualTo(finishedAt);
+		assertThat(room.getPhaseEndsAt()).isEqualTo(finishedAt.plusSeconds(120));
+	}
+
+	@Test
+	@DisplayName("제안이 끝날 때 메뉴가 1개면 합칠 상대가 없어서 투표 단계로, 0개면 랜덤 선택으로 간다")
+	void finishProposalSkipsMergingWhenNothingToMerge() {
+		Room oneMenu = proposingRoom();
+		Room noMenu = proposingRoom();
+
+		oneMenu.finishProposal(1, START.plusSeconds(5));
+		noMenu.finishProposal(0, START.plusSeconds(5));
+
+		assertThat(oneMenu.getStatus()).isEqualTo(RoomStatus.VOTING);
+		assertThat(noMenu.getStatus()).isEqualTo(RoomStatus.RANDOM_PICK);
+	}
+
+	@Test
+	@DisplayName("합치기가 끝나면 투표 단계로 간다")
+	void finishMergingStartsVoting() {
+		Room room = proposingRoom();
+		room.finishProposal(3, START.plusSeconds(5));
+
+		room.finishMerging(START.plusSeconds(30));
+
+		assertThat(room.getStatus()).isEqualTo(RoomStatus.VOTING);
+		assertThat(room.getPhaseStartedAt()).isEqualTo(START.plusSeconds(30));
 	}
 
 	@Test
@@ -54,8 +79,9 @@ class RoomTest {
 		Room waiting = Room.create("abcdefghij", PhaseDurations.defaults(), START);
 		Room proposing = proposingRoom();
 
-		assertThatThrownBy(() -> waiting.finishProposal(true, START)).isInstanceOf(IllegalStateException.class);
+		assertThatThrownBy(() -> waiting.finishProposal(2, START)).isInstanceOf(IllegalStateException.class);
 		assertThatThrownBy(() -> proposing.startProposal(START)).isInstanceOf(IllegalStateException.class);
+		assertThatThrownBy(() -> proposing.finishMerging(START)).isInstanceOf(IllegalStateException.class);
 	}
 
 	@Test

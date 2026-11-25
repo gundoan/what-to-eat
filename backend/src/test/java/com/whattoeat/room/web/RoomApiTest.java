@@ -253,8 +253,9 @@ class RoomApiTest {
 			Map<String, Object> me = JsonPath.read(body, "$.me");
 			assertThat(response).containsOnlyKeys("room", "me");
 			assertThat(roomState).containsOnlyKeys("code", "status", "phaseDurations", "participantCount", "phaseEndsAt",
-					"serverTime", "menus", "doneCount");
-			assertThat(me).containsOnlyKeys("host", "proposal", "allGood");
+					"serverTime", "menus", "doneCount", "mergeGroups");
+			assertThat(me).containsOnlyKeys("host", "proposal", "allGood", "menuId", "mergedInto", "pendingGroupId",
+					"done");
 		}
 
 	}

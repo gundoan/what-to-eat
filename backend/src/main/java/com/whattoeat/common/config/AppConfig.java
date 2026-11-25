@@ -1,7 +1,9 @@
 package com.whattoeat.common.config;
 
+import java.security.SecureRandom;
 import java.time.Clock;
 import java.time.Duration;
+import java.util.random.RandomGenerator;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -18,6 +20,15 @@ public class AppConfig {
 	@Bean
 	Clock clock() {
 		return Clock.tick(Clock.systemUTC(), Duration.ofMillis(1));
+	}
+
+	/**
+	 * 대표 메뉴 뽑기처럼 서버가 무작위로 정하는 일에 쓴다. 일반 Random은 앞의 결과로 다음 결과를 계산할 수 있어서,
+	 * 결과를 미리 알 수 없는 SecureRandom을 쓴다. 빈으로 두어 어디서 무작위를 쓰는지 드러나게 한다.
+	 */
+	@Bean
+	RandomGenerator randomGenerator() {
+		return new SecureRandom();
 	}
 
 }

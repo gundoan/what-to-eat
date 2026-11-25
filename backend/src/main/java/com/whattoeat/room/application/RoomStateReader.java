@@ -27,7 +27,7 @@ public class RoomStateReader {
 	 */
 	@Transactional(readOnly = true, propagation = Propagation.REQUIRES_NEW)
 	public Optional<RoomState> read(String code) {
-		return roomRepository.findByCode(code).map(assembler::state);
+		return roomRepository.findByCode(code).map(room -> assembler.views(room).room());
 	}
 
 }

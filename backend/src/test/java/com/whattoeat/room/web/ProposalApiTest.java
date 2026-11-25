@@ -3,6 +3,7 @@ package com.whattoeat.room.web;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.contains;
 import static org.hamcrest.Matchers.empty;
+import static org.hamcrest.Matchers.notNullValue;
 import static org.hamcrest.Matchers.nullValue;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -11,6 +12,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 import com.jayway.jsonpath.JsonPath;
 import com.whattoeat.IntegrationTest;
@@ -108,14 +110,23 @@ class ProposalApiTest {
 			TestRoom room = startedRoomWithGuests(1);
 			Cookie guest = guests.getFirst();
 
-			api.propose(room.code(), guest, "제육")
+			String body = api.propose(room.code(), guest, "제육")
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.me.proposal").value("제육"))
-				.andExpect(jsonPath("$.room.menus", contains("제육")))
-				.andExpect(jsonPath("$.room.doneCount").value(1));
+				.andExpect(jsonPath("$.me.done").value(true))
+				.andExpect(jsonPath("$.room.menus[*].name", contains("제육")))
+				.andExpect(jsonPath("$.room.doneCount").value(1))
+				.andReturn()
+				.getResponse()
+				.getContentAsString();
+			// 목록의 메뉴 중 어느 것이 내 것인지는 내 응답에만 있다.
+			assertThat(JsonPath.<String>read(body, "$.me.menuId")).isEqualTo(JsonPath.read(body, "$.room.menus[0].id"));
+
 			api.getRoom(room.code(), room.host())
-				.andExpect(jsonPath("$.room.menus", contains("제육")))
-				.andExpect(jsonPath("$.me.proposal", nullValue()));
+				.andExpect(jsonPath("$.room.menus[*].name", contains("제육")))
+				.andExpect(jsonPath("$.me.proposal", nullValue()))
+				.andExpect(jsonPath("$.me.menuId", nullValue()))
+				.andExpect(jsonPath("$.me.done").value(false));
 		}
 
 		@Test
@@ -126,7 +137,7 @@ class ProposalApiTest {
 
 			api.propose(room.code(), guest, "제육").andExpect(status().isOk());
 			api.propose(room.code(), guest, "김치찌개")
-				.andExpect(jsonPath("$.room.menus", contains("김치찌개")))
+				.andExpect(jsonPath("$.room.menus[*].name", contains("김치찌개")))
 				.andExpect(jsonPath("$.me.proposal").value("김치찌개"));
 		}
 
@@ -139,7 +150,7 @@ class ProposalApiTest {
 			api.propose(room.code(), guests.get(1), "김밥");
 			api.propose(room.code(), guests.get(2), "라면");
 			api.propose(room.code(), guests.get(3), "김밥")
-				.andExpect(jsonPath("$.room.menus", contains("김밥", "김밥", "라면", "짜장면")));
+				.andExpect(jsonPath("$.room.menus[*].name", contains("김밥", "김밥", "라면", "짜장면")));
 		}
 
 		@Test
@@ -167,7 +178,7 @@ class ProposalApiTest {
 
 			api.nextPhase(room.code(), room.host(), "WAITING");
 			api.propose(room.code(), room.host(), "김밥");
-			api.nextPhase(room.code(), room.host(), "PROPOSING").andExpect(jsonPath("$.room.status").value("MERGING"));
+			api.nextPhase(room.code(), room.host(), "PROPOSING").andExpect(jsonPath("$.room.status").value("VOTING"));
 
 			api.propose(room.code(), guest, "제육").andExpect(status().isConflict());
 			api.allGood(room.code(), guest).andExpect(status().isConflict());
@@ -233,8 +244,8 @@ class ProposalApiTest {
 
 			api.allGood(room.code(), guests.get(1))
 				.andExpect(jsonPath("$.room.status").value("MERGING"))
-				.andExpect(jsonPath("$.room.phaseEndsAt", nullValue()))
-				.andExpect(jsonPath("$.room.menus", contains("김밥", "제육")));
+				.andExpect(jsonPath("$.room.phaseEndsAt", notNullValue()))
+				.andExpect(jsonPath("$.room.menus[*].name", contains("김밥", "제육")));
 		}
 
 		@Test
@@ -250,7 +261,8 @@ class ProposalApiTest {
 		@DisplayName("방장이 다음 단계로를 누르면 아직 안 끝낸 사람이 있어도 넘어간다")
 		void hostCanMoveOnEarly() throws Exception {
 			TestRoom room = startedRoomWithGuests(2);
-			api.propose(room.code(), guests.getFirst(), "제육");
+			api.propose(room.code(), guests.get(0), "제육");
+			api.propose(room.code(), guests.get(1), "김밥");
 
 			api.nextPhase(room.code(), room.host(), "PROPOSING").andExpect(jsonPath("$.room.status").value("MERGING"));
 		}
@@ -270,12 +282,24 @@ class ProposalApiTest {
 		}
 
 		@Test
-		@DisplayName("합치기 단계의 다음 단계는 아직 없어서 방장도 넘길 수 없다")
-		void noNextPhaseAfterProposalYet() throws Exception {
-			TestRoom room = startedRoomWithGuests(0);
-			api.propose(room.code(), room.host(), "제육").andExpect(jsonPath("$.room.status").value("MERGING"));
+		@DisplayName("메뉴가 하나뿐이면 합칠 상대가 없어서 합치기 없이 바로 투표 단계로 간다")
+		void skipsMergingWithSingleMenu() throws Exception {
+			TestRoom room = startedRoomWithGuests(1);
+			api.allGood(room.code(), guests.getFirst());
 
-			api.nextPhase(room.code(), room.host(), "MERGING")
+			api.propose(room.code(), room.host(), "제육")
+				.andExpect(jsonPath("$.room.status").value("VOTING"))
+				.andExpect(jsonPath("$.room.menus[*].name", contains("제육")))
+				.andExpect(jsonPath("$.room.mergeGroups", empty()));
+		}
+
+		@Test
+		@DisplayName("투표 단계의 다음 단계는 아직 없어서 방장도 넘길 수 없다")
+		void noNextPhaseAfterVotingYet() throws Exception {
+			TestRoom room = startedRoomWithGuests(0);
+			api.propose(room.code(), room.host(), "제육").andExpect(jsonPath("$.room.status").value("VOTING"));
+
+			api.nextPhase(room.code(), room.host(), "VOTING")
 				.andExpect(status().isConflict())
 				.andExpect(jsonPath("$.code").value("NO_NEXT_PHASE"));
 		}
@@ -283,15 +307,18 @@ class ProposalApiTest {
 	}
 
 	@Test
-	@DisplayName("메뉴 목록에는 누가 냈는지가 없다 (이름만 있다)")
+	@DisplayName("메뉴 목록에는 누가 냈는지가 없고, 메뉴 번호는 올라온 순서가 드러나지 않는 무작위 값이다")
 	void menuListRevealsNoProposer() throws Exception {
 		TestRoom room = startedRoomWithGuests(2);
 		api.propose(room.code(), guests.get(0), "제육");
 
 		String body = api.getRoom(room.code(), guests.get(1)).andReturn().getResponse().getContentAsString();
 
-		List<Object> menus = JsonPath.read(body, "$.room.menus");
-		assertThat(menus).containsExactly("제육").allSatisfy(menu -> assertThat(menu).isInstanceOf(String.class));
+		List<Map<String, Object>> menus = JsonPath.read(body, "$.room.menus");
+		assertThat(menus).hasSize(1).allSatisfy(menu -> assertThat(menu).containsOnlyKeys("id", "name"));
+		assertThat(menus.getFirst().get("name")).isEqualTo("제육");
+		// DB 번호(1, 2, 3...)가 아니라 무작위 UUID다.
+		assertThat((String) menus.getFirst().get("id")).matches("[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}");
 		assertThat(JsonPath.<String>read(body, "$.me.proposal")).isNull();
 	}
 

@@ -66,7 +66,7 @@ class ProposalConcurrencyTest {
 
 		Room room = roomRepository.findByCode(created.code()).orElseThrow();
 		assertThat(room.getStatus()).isEqualTo(RoomStatus.MERGING);
-		assertThat(menuRepository.findNamesByRoom(room)).hasSize(Room.MAX_PARTICIPANTS);
+		assertThat(menuRepository.findSortedByRoom(room)).hasSize(Room.MAX_PARTICIPANTS);
 	}
 
 	@Test
