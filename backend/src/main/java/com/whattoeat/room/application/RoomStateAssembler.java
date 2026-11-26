@@ -13,6 +13,7 @@ import com.whattoeat.room.domain.Menu;
 import com.whattoeat.room.domain.MenuRepository;
 import com.whattoeat.room.domain.MergeGroup;
 import com.whattoeat.room.domain.MergeGroupRepository;
+import com.whattoeat.room.domain.MergeRequestRules;
 import com.whattoeat.room.domain.Participant;
 import com.whattoeat.room.domain.ParticipantRepository;
 import com.whattoeat.room.domain.Room;
@@ -55,35 +56,23 @@ class RoomStateAssembler {
 		List<Menu> menus = menuRepository.findSortedByRoom(room);
 		List<MergeGroup> groups = mergeGroupRepository.findWithMenusByRoom(room);
 		Map<Long, Menu> menuByParticipantId = Menu.byParticipantId(menus);
+		List<Menu> remaining = menus.stream().filter(menu -> !menu.isMerged()).toList();
 		RoomStatus status = room.getStatus();
 
 		long doneCount = participants.stream()
 			.filter(participant -> participant.hasFinished(status, menuByParticipantId.get(participant.getId())))
 			.count();
 		RoomState state = new RoomState(room.getCode(), status, room.getPhaseDurations(), participants.size(),
-				room.getPhaseEndsAt(), clock.instant(), remainingMenus(menus), doneCount, groupItems(groups, menus));
+				room.getPhaseEndsAt(), clock.instant(), remaining.stream().map(RoomStateAssembler::item).toList(),
+				doneCount, groupItems(groups, menus));
 
-		Map<Long, String> waitingGroupIdByMenuId = waitingGroupIdByMenuId(groups);
+		MeFactory meFactory = new MeFactory(status, groups, remaining, MergeRequestRules.of(participants, groups));
 		Map<Long, Me> meByParticipantId = new HashMap<>();
 		for (Participant participant : participants) {
-			Menu myMenu = menuByParticipantId.get(participant.getId());
-			meByParticipantId.put(participant.getId(), me(participant, myMenu, status, waitingGroupIdByMenuId));
+			meByParticipantId.put(participant.getId(),
+					meFactory.me(participant, menuByParticipantId.get(participant.getId())));
 		}
 		return new RoomViews(state, meByParticipantId);
-	}
-
-	private static Me me(Participant participant, Menu myMenu, RoomStatus status,
-			Map<Long, String> waitingGroupIdByMenuId) {
-		boolean proposed = myMenu != null;
-		boolean merged = proposed && myMenu.isMerged();
-		return new Me(participant.isHost(), proposed ? myMenu.getName() : null, participant.isProposalAllGood(),
-				proposed && !merged ? myMenu.getPublicId() : null, merged ? myMenu.getMergedInto().getName() : null,
-				proposed ? waitingGroupIdByMenuId.get(myMenu.getId()) : null, participant.hasFinished(status, myMenu));
-	}
-
-	/** 다른 메뉴에 합쳐지지 않고 남은 메뉴. menus가 이미 가나다순이라 순서는 그대로 둔다. */
-	private static List<MenuItem> remainingMenus(List<Menu> sortedMenus) {
-		return sortedMenus.stream().filter(menu -> !menu.isMerged()).map(RoomStateAssembler::item).toList();
 	}
 
 	/**
@@ -103,27 +92,74 @@ class RoomStateAssembler {
 			.map(group -> new SortedGroup(group, group.getMenus().stream().sorted(inDisplayOrder).toList()))
 			.sorted(Comparator.comparing(sorted -> displayOrder.get(sorted.menus().getFirst().getId())))
 			.map(sorted -> {
-				Menu representative = sorted.group().getRepresentative();
-				return new MergeGroupItem(sorted.group().getPublicId(), sorted.group().getStatus(),
+				MergeGroup group = sorted.group();
+				Menu target = group.getTarget();
+				Menu representative = group.getRepresentative();
+				return new MergeGroupItem(group.getPublicId(), group.getKind(), group.getStatus(),
 						sorted.menus().stream().map(RoomStateAssembler::item).toList(),
-						representative == null ? null : representative.getName(), sorted.group().getAnsweredCount());
+						target == null ? null : target.getPublicId(),
+						representative == null ? null : representative.getName(), group.getAnsweredCount());
 			})
 			.toList();
 	}
 
-	/** 메뉴 번호 → 그 메뉴를 낸 사람의 답을 기다리는 그룹 번호. 한 메뉴는 답을 기다리는 그룹에 많아야 하나 들어 있다. */
-	private static Map<Long, String> waitingGroupIdByMenuId(List<MergeGroup> groups) {
-		Map<Long, String> result = new HashMap<>();
-		for (MergeGroup group : groups) {
-			for (Menu menu : group.getWaitingMenus()) {
-				result.put(menu.getId(), group.getPublicId());
-			}
-		}
-		return result;
-	}
-
 	private static MenuItem item(Menu menu) {
 		return new MenuItem(menu.getPublicId(), menu.getName());
+	}
+
+	/** 참여자마다의 "나" 정보를 만든다. 방 전체에서 한 번만 계산하면 되는 것(그룹별 대기, 요청 규칙)을 미리 들고 있다. */
+	private static final class MeFactory {
+
+		private final RoomStatus status;
+
+		private final List<Menu> remaining;
+
+		private final MergeRequestRules requestRules;
+
+		/** 메뉴 번호 → 그 메뉴를 낸 사람의 답을 기다리는 그룹 번호 */
+		private final Map<Long, String> waitingGroupIdByMenuId = new HashMap<>();
+
+		/** 메뉴 번호 → 그 메뉴를 낸 사람이 보내고 답을 기다리는 직접 요청 번호 */
+		private final Map<Long, String> sentGroupIdByMenuId = new HashMap<>();
+
+		MeFactory(RoomStatus status, List<MergeGroup> groups, List<Menu> remaining, MergeRequestRules requestRules) {
+			this.status = status;
+			this.remaining = remaining;
+			this.requestRules = requestRules;
+			// 한 메뉴는 결과가 안 나온 그룹에 많아야 하나 들어 있어서, 메뉴 하나에 그룹 번호 하나다.
+			for (MergeGroup group : groups) {
+				for (Menu menu : group.getWaitingMenus()) {
+					waitingGroupIdByMenuId.put(menu.getId(), group.getPublicId());
+				}
+				for (Menu menu : group.getMenus()) {
+					if (group.isSentBy(menu)) {
+						sentGroupIdByMenuId.put(menu.getId(), group.getPublicId());
+					}
+				}
+			}
+		}
+
+		Me me(Participant participant, Menu myMenu) {
+			boolean proposed = myMenu != null;
+			boolean merged = proposed && myMenu.isMerged();
+			return new Me(participant.isHost(), proposed ? myMenu.getName() : null, participant.isProposalAllGood(),
+					proposed && !merged ? myMenu.getPublicId() : null, merged ? myMenu.finalMenu().getName() : null,
+					proposed ? waitingGroupIdByMenuId.get(myMenu.getId()) : null,
+					proposed ? sentGroupIdByMenuId.get(myMenu.getId()) : null, requestableMenuIds(participant, myMenu),
+					participant.hasFinished(status, myMenu));
+		}
+
+		/** 직접 합치기는 합치기 단계에서만 할 수 있다. 버튼을 켤 메뉴는 요청 API와 같은 규칙으로 고른다. */
+		private List<String> requestableMenuIds(Participant participant, Menu myMenu) {
+			if (status != RoomStatus.MERGING) {
+				return List.of();
+			}
+			return requestRules.requestableTargets(participant, myMenu, remaining)
+				.stream()
+				.map(Menu::getPublicId)
+				.toList();
+		}
+
 	}
 
 }

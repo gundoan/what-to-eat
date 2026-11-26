@@ -3,6 +3,7 @@ package com.whattoeat.room.application;
 import java.time.Instant;
 import java.util.List;
 
+import com.whattoeat.room.domain.MergeGroupKind;
 import com.whattoeat.room.domain.MergeGroupStatus;
 import com.whattoeat.room.domain.PhaseDurations;
 import com.whattoeat.room.domain.RoomStatus;
@@ -28,12 +29,14 @@ public record RoomState(String code, RoomStatus status, PhaseDurations phaseDura
 	}
 
 	/**
+	 * @param kind AUTO(자동으로 묶은 그룹) 또는 DIRECT(직접 합치기 요청)
 	 * @param menus 그룹에 든 메뉴(합쳐져 사라진 메뉴 포함), 가나다순
+	 * @param targetMenuId 직접 요청에서 요청받은 메뉴의 번호. 나머지 하나가 요청한 메뉴다. 자동 그룹이면 null
 	 * @param representative 합쳐졌을 때 남은 대표 메뉴 이름. 아니면 null
 	 * @param answeredCount 답한 사람 수. 누가 어떻게 답했는지는 없다
 	 */
-	public record MergeGroupItem(String id, MergeGroupStatus status, List<MenuItem> menus, String representative,
-			long answeredCount) {
+	public record MergeGroupItem(String id, MergeGroupKind kind, MergeGroupStatus status, List<MenuItem> menus,
+			String targetMenuId, String representative, long answeredCount) {
 	}
 
 }
