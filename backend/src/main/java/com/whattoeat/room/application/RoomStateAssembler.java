@@ -7,8 +7,13 @@ import java.util.List;
 import java.util.Map;
 
 import com.whattoeat.room.application.RoomState.MenuItem;
+import com.whattoeat.room.application.RoomState.MenuScoreItem;
 import com.whattoeat.room.application.RoomState.MergeGroupItem;
+import com.whattoeat.room.application.RoomView.BallotItem;
 import com.whattoeat.room.application.RoomView.Me;
+import com.whattoeat.room.application.RoomView.VoteItem;
+import com.whattoeat.room.domain.Ballot;
+import com.whattoeat.room.domain.BallotRepository;
 import com.whattoeat.room.domain.Menu;
 import com.whattoeat.room.domain.MenuRepository;
 import com.whattoeat.room.domain.MergeGroup;
@@ -18,6 +23,7 @@ import com.whattoeat.room.domain.Participant;
 import com.whattoeat.room.domain.ParticipantRepository;
 import com.whattoeat.room.domain.Room;
 import com.whattoeat.room.domain.RoomStatus;
+import com.whattoeat.room.domain.VoteTally;
 import org.springframework.stereotype.Component;
 
 /**
@@ -33,13 +39,16 @@ class RoomStateAssembler {
 
 	private final MergeGroupRepository mergeGroupRepository;
 
+	private final BallotRepository ballotRepository;
+
 	private final Clock clock;
 
 	RoomStateAssembler(ParticipantRepository participantRepository, MenuRepository menuRepository,
-			MergeGroupRepository mergeGroupRepository, Clock clock) {
+			MergeGroupRepository mergeGroupRepository, BallotRepository ballotRepository, Clock clock) {
 		this.participantRepository = participantRepository;
 		this.menuRepository = menuRepository;
 		this.mergeGroupRepository = mergeGroupRepository;
+		this.ballotRepository = ballotRepository;
 		this.clock = clock;
 	}
 
@@ -49,30 +58,55 @@ class RoomStateAssembler {
 	}
 
 	/**
-	 * 방 상태와 참여자 모두의 "나" 정보를 한 번에 만든다. 참여자가 몇 명이든 참여자, 메뉴, 합치기 그룹을 한 번씩만 읽는다.
+	 * 방 상태와 참여자 모두의 "나" 정보를 한 번에 만든다.
+	 * 참여자가 몇 명이든 참여자, 메뉴, 합치기 그룹, 투표지를 한 번씩만 읽는다.
 	 */
 	RoomViews views(Room room) {
 		List<Participant> participants = participantRepository.findByRoom(room);
 		List<Menu> menus = menuRepository.findSortedByRoom(room);
 		List<MergeGroup> groups = mergeGroupRepository.findWithMenusByRoom(room);
+		List<Ballot> ballots = ballotRepository.findWithVotesByRoomAndVoteRound(room, Ballot.FIRST_ROUND);
 		Map<Long, Menu> menuByParticipantId = Menu.byParticipantId(menus);
-		List<Menu> remaining = menus.stream().filter(menu -> !menu.isMerged()).toList();
+		Map<Long, Ballot> ballotByParticipantId = Ballot.byParticipantId(ballots);
+		List<Menu> remaining = Menu.remaining(menus);
 		RoomStatus status = room.getStatus();
 
 		long doneCount = participants.stream()
-			.filter(participant -> participant.hasFinished(status, menuByParticipantId.get(participant.getId())))
+			.filter(participant -> participant.hasFinished(status, menuByParticipantId.get(participant.getId()),
+					ballotByParticipantId.get(participant.getId())))
 			.count();
+		Menu resultMenu = room.getResultMenu();
 		RoomState state = new RoomState(room.getCode(), status, room.getPhaseDurations(), participants.size(),
 				room.getPhaseEndsAt(), clock.instant(), remaining.stream().map(RoomStateAssembler::item).toList(),
-				doneCount, groupItems(groups, menus));
+				doneCount, groupItems(groups, menus), resultMenu == null ? null : item(resultMenu),
+				voteScores(status, remaining, ballots));
 
 		MeFactory meFactory = new MeFactory(status, groups, remaining, MergeRequestRules.of(participants, groups));
 		Map<Long, Me> meByParticipantId = new HashMap<>();
 		for (Participant participant : participants) {
-			meByParticipantId.put(participant.getId(),
-					meFactory.me(participant, menuByParticipantId.get(participant.getId())));
+			meByParticipantId.put(participant.getId(), meFactory.me(participant,
+					menuByParticipantId.get(participant.getId()), ballotByParticipantId.get(participant.getId())));
 		}
 		return new RoomViews(state, meByParticipantId);
+	}
+
+	/**
+	 * 메뉴별 점수. 투표가 끝난 뒤(재투표로 가거나 결정됐을 때)에만 보여준다.
+	 * 투표 중에 보여주면 누가 표를 낸 순간 바뀐 점수로 그 사람의 표를 짐작할 수 있고, 앞선 메뉴로 표가 쏠릴 수 있다.
+	 * 투표 없이 결정된 경우(메뉴가 하나뿐)에는 보여줄 점수가 없다.
+	 */
+	private static List<MenuScoreItem> voteScores(RoomStatus status, List<Menu> remaining, List<Ballot> ballots) {
+		if (status != RoomStatus.REVOTING && status != RoomStatus.FINISHED) {
+			return List.of();
+		}
+		VoteTally tally = VoteTally.count(remaining, ballots);
+		if (tally.hasNoVotes()) {
+			return List.of();
+		}
+		return tally.ranking()
+			.stream()
+			.map(score -> new MenuScoreItem(item(score.menu()), score.plus(), score.minus(), score.total()))
+			.toList();
 	}
 
 	/**
@@ -139,14 +173,25 @@ class RoomStateAssembler {
 			}
 		}
 
-		Me me(Participant participant, Menu myMenu) {
+		Me me(Participant participant, Menu myMenu, Ballot myBallot) {
 			boolean proposed = myMenu != null;
 			boolean merged = proposed && myMenu.isMerged();
 			return new Me(participant.isHost(), proposed ? myMenu.getName() : null, participant.isProposalAllGood(),
 					proposed && !merged ? myMenu.getPublicId() : null, merged ? myMenu.finalMenu().getName() : null,
 					proposed ? waitingGroupIdByMenuId.get(myMenu.getId()) : null,
 					proposed ? sentGroupIdByMenuId.get(myMenu.getId()) : null, requestableMenuIds(participant, myMenu),
-					participant.hasFinished(status, myMenu));
+					ballotItem(myBallot), participant.hasFinished(status, myMenu, myBallot));
+		}
+
+		private static BallotItem ballotItem(Ballot ballot) {
+			if (ballot == null) {
+				return null;
+			}
+			List<VoteItem> votes = ballot.getVotes()
+				.stream()
+				.map(vote -> new VoteItem(vote.getMenu().getPublicId(), vote.getPoint()))
+				.toList();
+			return new BallotItem(ballot.isAllGood(), votes);
 		}
 
 		/** 직접 합치기는 합치기 단계에서만 할 수 있다. 버튼을 켤 메뉴는 요청 API와 같은 규칙으로 고른다. */

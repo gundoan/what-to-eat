@@ -4,7 +4,7 @@ import java.util.List;
 
 /**
  * 한 참여자가 받는 방 화면 정보. 공통 방 상태(room)와 받는 사람 본인에 대한 정보(me)로 나뉜다.
- * me에는 본인 것만 들어가므로, 다른 사람이 방장인지 무엇을 냈는지는 드러나지 않는다.
+ * me에는 본인 것만 들어가므로, 다른 사람이 방장인지 무엇을 냈는지 어떻게 투표했는지는 드러나지 않는다.
  */
 public record RoomView(RoomState room, Me me) {
 
@@ -17,10 +17,24 @@ public record RoomView(RoomState room, Me me) {
 	 * @param pendingGroupId 내 답을 기다리는 합치기 그룹(자동 그룹이나 내가 받은 직접 요청)의 번호. 없으면 null
 	 * @param sentGroupId 내가 보내고 상대의 답을 기다리는 직접 요청의 번호. 없으면 null
 	 * @param requestableMenuIds 지금 내가 직접 합치기를 요청할 수 있는 메뉴들의 번호
-	 * @param done 내가 지금 단계(제안, 합치기)에서 할 일을 끝냈는지
+	 * @param ballot 내가 낸 투표지. 아직 내지 않았으면 null
+	 * @param done 내가 지금 단계(제안, 합치기, 투표)에서 할 일을 끝냈는지
 	 */
 	public record Me(boolean host, String proposal, boolean allGood, String menuId, String mergedInto,
-			String pendingGroupId, String sentGroupId, List<String> requestableMenuIds, boolean done) {
+			String pendingGroupId, String sentGroupId, List<String> requestableMenuIds, BallotItem ballot,
+			boolean done) {
+	}
+
+	/**
+	 * 내가 낸 투표지. 본인에게만 보인다.
+	 *
+	 * @param allGood "다 좋음"을 눌렀는지. 참이면 votes가 비어 있다
+	 */
+	public record BallotItem(boolean allGood, List<VoteItem> votes) {
+	}
+
+	/** @param point +1(먹고 싶다) 또는 -1(먹기 싫다) */
+	public record VoteItem(String menuId, int point) {
 	}
 
 }

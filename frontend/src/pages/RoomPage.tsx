@@ -1,8 +1,10 @@
 import { useState } from 'react'
 import { Link, useParams } from 'react-router'
+import { FinishedPhase } from '../components/phases/FinishedPhase'
 import { MergingPhase } from '../components/phases/MergingPhase'
 import { ProposingPhase } from '../components/phases/ProposingPhase'
 import { RandomPickPhase } from '../components/phases/RandomPickPhase'
+import { RevotingPhase } from '../components/phases/RevotingPhase'
 import { VotingPhase } from '../components/phases/VotingPhase'
 import { WaitingPhase } from '../components/phases/WaitingPhase'
 import { useRoom, type RoomError } from '../hooks/useRoom'
@@ -13,12 +15,15 @@ const STATUS_LABELS: Record<RoomStatus, string> = {
   PROPOSING: '메뉴 제안 중',
   MERGING: '합치기 중',
   VOTING: '투표 중',
+  REVOTING: '재투표 중',
   RANDOM_PICK: '랜덤 선택',
+  FINISHED: '종료',
 }
 
 const ERROR_MESSAGES: Record<RoomError, string> = {
   NOT_FOUND: '방을 찾을 수 없어요. 링크를 다시 확인해 주세요.',
   FULL: '방 정원(50명)이 가득 찼어요.',
+  ENDED: '투표가 끝난 방이라 들어갈 수 없어요. 새 방을 만들어 주세요.',
   UNKNOWN: '방에 들어가지 못했어요. 잠시 뒤 다시 시도해 주세요.',
 }
 
@@ -56,10 +61,13 @@ export function RoomPage() {
       )}
       {room.status === 'PROPOSING' && <ProposingPhase room={room} me={me} actions={actions} />}
       {room.status === 'MERGING' && <MergingPhase room={room} me={me} actions={actions} />}
-      {room.status === 'VOTING' && <VotingPhase menus={room.menus} myMenuId={me.menuId} />}
+      {room.status === 'VOTING' && <VotingPhase room={room} me={me} actions={actions} />}
+      {room.status === 'REVOTING' && <RevotingPhase scores={room.voteScores} />}
       {room.status === 'RANDOM_PICK' && <RandomPickPhase />}
+      {room.status === 'FINISHED' && <FinishedPhase room={room} me={me} />}
 
-      <CopyLinkButton />
+      {/* 메뉴가 결정된 방에는 새로 들어올 수 없으니 링크를 나눌 필요가 없다. */}
+      {room.status !== 'FINISHED' && <CopyLinkButton />}
     </main>
   )
 }

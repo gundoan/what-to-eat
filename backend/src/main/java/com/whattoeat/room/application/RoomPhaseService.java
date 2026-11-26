@@ -2,11 +2,14 @@ package com.whattoeat.room.application;
 
 import java.time.Clock;
 import java.time.Instant;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
 import com.whattoeat.common.error.BusinessException;
 import com.whattoeat.common.error.ErrorCode;
+import com.whattoeat.room.domain.Ballot;
+import com.whattoeat.room.domain.BallotRepository;
 import com.whattoeat.room.domain.Menu;
 import com.whattoeat.room.domain.MenuRepository;
 import com.whattoeat.room.domain.Participant;
@@ -14,6 +17,7 @@ import com.whattoeat.room.domain.ParticipantRepository;
 import com.whattoeat.room.domain.Room;
 import com.whattoeat.room.domain.RoomRepository;
 import com.whattoeat.room.domain.RoomStatus;
+import com.whattoeat.room.domain.VoteTally;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.ApplicationEventPublisher;
@@ -41,6 +45,8 @@ public class RoomPhaseService {
 
 	private final MenuRepository menuRepository;
 
+	private final BallotRepository ballotRepository;
+
 	private final MergePhase mergePhase;
 
 	private final RoomAccess access;
@@ -54,11 +60,13 @@ public class RoomPhaseService {
 	private final Clock clock;
 
 	RoomPhaseService(RoomRepository roomRepository, ParticipantRepository participantRepository,
-			MenuRepository menuRepository, MergePhase mergePhase, RoomAccess access, RoomStateAssembler assembler,
-			ApplicationEventPublisher events, TransactionTemplate transactionTemplate, Clock clock) {
+			MenuRepository menuRepository, BallotRepository ballotRepository, MergePhase mergePhase, RoomAccess access,
+			RoomStateAssembler assembler, ApplicationEventPublisher events, TransactionTemplate transactionTemplate,
+			Clock clock) {
 		this.roomRepository = roomRepository;
 		this.participantRepository = participantRepository;
 		this.menuRepository = menuRepository;
+		this.ballotRepository = ballotRepository;
 		this.mergePhase = mergePhase;
 		this.access = access;
 		this.assembler = assembler;
@@ -123,15 +131,18 @@ public class RoomPhaseService {
 
 	/** "끝냈다"의 기준은 단계마다 다르고, {@link Participant#hasFinished}에 한곳으로 모여 있다. */
 	private boolean isEveryoneFinished(Room room) {
-		// 대기 중은 방장의 "시작"으로만 넘어가고, 투표와 랜덤 선택은 기능 4·5에서 만든다.
-		if (room.getStatus() != RoomStatus.PROPOSING && room.getStatus() != RoomStatus.MERGING) {
+		// 대기 중은 방장의 "시작"으로만 넘어가고, 재투표와 랜덤 선택은 기능 5에서 만든다. 끝난 방은 넘어갈 곳이 없다.
+		RoomStatus status = room.getStatus();
+		if (status != RoomStatus.PROPOSING && status != RoomStatus.MERGING && status != RoomStatus.VOTING) {
 			return false;
 		}
 		Map<Long, Menu> menuByParticipantId = Menu.byParticipantId(menuRepository.findSortedByRoom(room));
+		Map<Long, Ballot> ballotByParticipantId = Ballot
+			.byParticipantId(ballotRepository.findWithVotesByRoomAndVoteRound(room, Ballot.FIRST_ROUND));
 		return participantRepository.findByRoom(room)
 			.stream()
-			.allMatch(participant -> participant.hasFinished(room.getStatus(),
-					menuByParticipantId.get(participant.getId())));
+			.allMatch(participant -> participant.hasFinished(status, menuByParticipantId.get(participant.getId()),
+					ballotByParticipantId.get(participant.getId())));
 	}
 
 	private boolean advanceIfExpired(String code, Instant now) {
@@ -149,17 +160,22 @@ public class RoomPhaseService {
 		switch (room.getStatus()) {
 			case WAITING -> room.startProposal(now);
 			case PROPOSING -> {
-				room.finishProposal(menuRepository.countByRoom(room), now);
+				room.finishProposal(menuRepository.findSortedByRoom(room), now);
 				if (room.getStatus() == RoomStatus.MERGING) {
 					mergePhase.open(room, now);
 				}
 			}
 			case MERGING -> {
 				mergePhase.close(room, now);
-				room.finishMerging(now);
+				room.finishMerging(Menu.remaining(menuRepository.findSortedByRoom(room)), now);
 			}
-			// 투표와 랜덤 선택의 다음 단계는 기능 4·5에서 만든다.
-			case VOTING, RANDOM_PICK -> throw new BusinessException(ErrorCode.NO_NEXT_PHASE);
+			case VOTING -> {
+				List<Menu> candidates = Menu.remaining(menuRepository.findSortedByRoom(room));
+				List<Ballot> ballots = ballotRepository.findWithVotesByRoomAndVoteRound(room, Ballot.FIRST_ROUND);
+				room.finishVoting(VoteTally.count(candidates, ballots), now);
+			}
+			// 재투표와 랜덤 선택의 다음 단계는 기능 5에서 만든다. 끝난 방은 더 넘어갈 곳이 없다.
+			case REVOTING, RANDOM_PICK, FINISHED -> throw new BusinessException(ErrorCode.NO_NEXT_PHASE);
 		}
 	}
 

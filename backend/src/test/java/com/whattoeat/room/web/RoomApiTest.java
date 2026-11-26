@@ -3,6 +3,7 @@ package com.whattoeat.room.web;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -193,6 +194,26 @@ class RoomApiTest {
 		}
 
 		@Test
+		@DisplayName("메뉴가 결정되어 끝난 방에는 새로 들어올 수 없고, 이미 참여한 사람은 다시 들어와 결과를 볼 수 있다")
+		void cannotJoinFinishedRoom() throws Exception {
+			CreatedRoom room = createRoom(null);
+			mockMvc.perform(post("/api/rooms/" + room.code() + "/next-phase").cookie(room.cookie())
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("{\"from\": \"WAITING\"}")).andExpect(status().isOk());
+			// 혼자 메뉴를 내면 바로 끝나고, 메뉴가 하나라 투표 없이 결정된다.
+			mockMvc.perform(put("/api/rooms/" + room.code() + "/me/proposal").cookie(room.cookie())
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("{\"menuName\": \"kimbap\"}")).andExpect(jsonPath("$.room.status").value("FINISHED"));
+
+			mockMvc.perform(post("/api/rooms/" + room.code() + "/participants"))
+				.andExpect(status().isConflict())
+				.andExpect(jsonPath("$.code").value("VOTING_ENDED"));
+			mockMvc.perform(post("/api/rooms/" + room.code() + "/participants").cookie(room.cookie()))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.room.resultMenu.name").value("kimbap"));
+		}
+
+		@Test
 		@DisplayName("정원이 찬 방이라도 이미 참여한 사람은 다시 들어올 수 있다")
 		void existingParticipantCanRejoinFullRoom() throws Exception {
 			CreatedRoom room = createRoom(null);
@@ -253,9 +274,9 @@ class RoomApiTest {
 			Map<String, Object> me = JsonPath.read(body, "$.me");
 			assertThat(response).containsOnlyKeys("room", "me");
 			assertThat(roomState).containsOnlyKeys("code", "status", "phaseDurations", "participantCount", "phaseEndsAt",
-					"serverTime", "menus", "doneCount", "mergeGroups");
+					"serverTime", "menus", "doneCount", "mergeGroups", "resultMenu", "voteScores");
 			assertThat(me).containsOnlyKeys("host", "proposal", "allGood", "menuId", "mergedInto", "pendingGroupId",
-					"sentGroupId", "requestableMenuIds", "done");
+					"sentGroupId", "requestableMenuIds", "ballot", "done");
 		}
 
 	}

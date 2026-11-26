@@ -3,6 +3,7 @@ package com.whattoeat.room.web;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.containsInAnyOrder;
 import static org.hamcrest.Matchers.empty;
+import static org.hamcrest.Matchers.notNullValue;
 import static org.hamcrest.Matchers.nullValue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -224,7 +225,7 @@ class MergeApiTest {
 				.andExpect(jsonPath("$.room.status").value("MERGING"));
 			api.finishMerge(room.code(), room.person(1))
 				.andExpect(jsonPath("$.room.status").value("VOTING"))
-				.andExpect(jsonPath("$.room.phaseEndsAt", nullValue()))
+				.andExpect(jsonPath("$.room.phaseEndsAt", notNullValue()))
 				.andExpect(jsonPath("$.room.menus[*].name", containsInAnyOrder("김밥", "라면")));
 		}
 
@@ -271,10 +272,12 @@ class MergeApiTest {
 			api.answerMerge(created.code(), host, group, true);
 			api.answerMerge(created.code(), guest, group, true).andExpect(jsonPath("$.room.doneCount").value(2));
 
-			// 메뉴가 남은 사람(대표 메뉴를 낸 사람)만 누르면 모두 끝난다.
+			// 메뉴가 남은 사람(대표 메뉴를 낸 사람)만 누르면 모두 끝난다. 메뉴가 하나만 남아서 투표 없이 결정된다.
 			Cookie representativeOwner = JsonPath.read(api.roomJson(created.code(), host), "$.me.menuId") != null
 					? host : guest;
-			api.finishMerge(created.code(), representativeOwner).andExpect(jsonPath("$.room.status").value("VOTING"));
+			api.finishMerge(created.code(), representativeOwner)
+				.andExpect(jsonPath("$.room.status").value("FINISHED"))
+				.andExpect(jsonPath("$.room.resultMenu", notNullValue()));
 		}
 
 		@Test

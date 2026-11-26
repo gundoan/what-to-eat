@@ -25,7 +25,11 @@ public enum ErrorCode {
 	TARGET_FINISHED_MERGING(HttpStatus.CONFLICT, "이 메뉴의 제안자는 합치기를 끝내서 요청을 받을 수 없습니다."),
 	MENU_BUSY(HttpStatus.CONFLICT, "결과가 안 나온 합치기에 든 메뉴라서 지금은 요청할 수 없습니다."),
 	ALREADY_DECLINED(HttpStatus.CONFLICT, "이 메뉴와는 이미 합치지 않기로 했습니다."),
-	WAITING_FOR_REQUEST_ANSWER(HttpStatus.CONFLICT, "보낸 요청의 답을 기다리는 중이라 아직 합치기를 끝낼 수 없습니다.");
+	WAITING_FOR_REQUEST_ANSWER(HttpStatus.CONFLICT, "보낸 요청의 답을 기다리는 중이라 아직 합치기를 끝낼 수 없습니다."),
+	NOT_VOTING_PHASE(HttpStatus.CONFLICT, "지금은 투표할 수 있는 단계가 아닙니다."),
+	INVALID_BALLOT(HttpStatus.BAD_REQUEST, "표는 1~2개, 한 메뉴에 1표씩, +1 또는 -1로 낼 수 있습니다. 투표하지 않으려면 '다 좋음'을 눌러 주세요."),
+	ALREADY_VOTED(HttpStatus.CONFLICT, "이미 투표했습니다. 낸 표는 바꿀 수 없습니다."),
+	VOTING_ENDED(HttpStatus.CONFLICT, "투표가 끝난 방이라 새로 들어올 수 없습니다.");
 
 	private final HttpStatus status;
 	private final String message;

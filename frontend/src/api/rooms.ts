@@ -1,5 +1,5 @@
 import { request } from './client'
-import type { PhaseDurations, RoomStatus, RoomView } from '../types/room'
+import type { PhaseDurations, RoomStatus, RoomView, Vote } from '../types/room'
 
 export function createRoom(durations: PhaseDurations): Promise<{ code: string }> {
   return request('/api/rooms', { method: 'POST', body: JSON.stringify(durations) })
@@ -53,6 +53,16 @@ export function answerMerge(code: string, groupId: string, agree: boolean): Prom
     method: 'PUT',
     body: JSON.stringify({ agree }),
   })
+}
+
+/** 표(1~2개)를 낸다. 한 번 내면 바꿀 수 없다. */
+export function submitVotes(code: string, votes: Vote[]): Promise<RoomView> {
+  return request(`${roomPath(code)}/me/ballot`, { method: 'PUT', body: JSON.stringify({ votes }) })
+}
+
+/** 투표의 "다 좋음"(투표하지 않음). 한 번 누르면 바꿀 수 없다. */
+export function voteAllGood(code: string): Promise<RoomView> {
+  return request(`${roomPath(code)}/me/ballot`, { method: 'PUT', body: JSON.stringify({ allGood: true }) })
 }
 
 /** "합치기 끝냄". 답하지 않은 질문은 "합치지 않기"로 처리된다. */

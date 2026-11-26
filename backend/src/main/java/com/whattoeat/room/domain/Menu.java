@@ -70,6 +70,11 @@ public class Menu {
 		return new Menu(room, participant, name, now);
 	}
 
+	/** 다른 메뉴에 합쳐지지 않고 남은 메뉴들. 순서는 그대로 둔다. 투표는 이 메뉴들로 한다. */
+	public static List<Menu> remaining(List<Menu> menus) {
+		return menus.stream().filter(menu -> !menu.isMerged()).toList();
+	}
+
 	/** 메뉴들을 낸 사람(참여자 번호)으로 찾을 수 있게 모은다. 한 사람은 한 방에 메뉴가 많아야 하나다. */
 	public static Map<Long, Menu> byParticipantId(List<Menu> menus) {
 		return menus.stream().collect(Collectors.toMap(menu -> menu.getParticipant().getId(), Function.identity()));

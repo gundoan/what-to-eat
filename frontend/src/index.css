@@ -80,3 +80,32 @@ button.inline {
   padding: 4px 8px;
   font-size: 0.875rem;
 }
+
+button[aria-pressed='true'] {
+  font-weight: bold;
+  outline: 2px solid currentColor;
+}
+
+.ballot {
+  padding: 0;
+  list-style: none;
+}
+
+.ballot li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 0;
+}
+
+.scores {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.scores th,
+.scores td {
+  padding: 6px;
+  text-align: left;
+  border-bottom: 1px solid currentColor;
+}
