@@ -27,11 +27,17 @@ import org.hibernate.type.SqlTypes;
 
 /**
  * 합치기 그룹: "이 메뉴들을 합칠까요?"라는 질문 하나. 그룹에 든 메뉴를 낸 사람들이 각자 한 번씩 답한다.
+ * 자동 그룹({@link MergeGroupKind#AUTO})과 직접 합치기 요청({@link MergeGroupKind#DIRECT}) 모두 이 모양이다.
  *
  * <ul>
  * <li>모두 답하면 바로 결과를 낸다. 시간이 다 되거나 방장이 넘기면 답하지 않은 사람은 "합치지 않기"로 본다.</li>
- * <li>동의한 메뉴가 2개 이상이면 그중 하나를 서버가 무작위로 대표 메뉴로 뽑고, 나머지 동의한 메뉴를 대표에 합친다.
- * 이름은 다시 정하지 않고 뽑힌 메뉴의 원래 이름을 쓴다(같은 제육이라도 가게마다 맛이 다르니까).</li>
+ * <li>동의한 메뉴가 2개 이상이면 대표 메뉴 하나만 남기고, 나머지 동의한 메뉴를 대표에 합친다.
+ * 이름은 다시 정하지 않고 대표 메뉴의 원래 이름을 쓴다(같은 제육이라도 가게마다 맛이 다르니까).
+ * <ul>
+ * <li>자동 그룹: 동의한 메뉴 중 하나를 서버가 무작위로 뽑는다.</li>
+ * <li>직접 요청: 요청받은 메뉴가 대표로 남는다. 요청한 사람이 자기 메뉴를 내려놓겠다고 먼저 나선 것이기 때문이다.</li>
+ * </ul>
+ * </li>
  * <li>거절했거나 답하지 않은 사람의 메뉴는 따로 남는다.</li>
  * </ul>
  */
@@ -68,6 +74,11 @@ public class MergeGroup {
 	@JoinColumn(name = "representative_menu_id")
 	private Menu representative;
 
+	/** 직접 요청에서 요청받은 메뉴. 자동 그룹에서는 비어 있다. */
+	@ManyToOne(fetch = FetchType.LAZY)
+	@JoinColumn(name = "target_menu_id")
+	private Menu target;
+
 	@Column(nullable = false, updatable = false)
 	private Instant createdAt;
 
@@ -80,7 +91,7 @@ public class MergeGroup {
 	protected MergeGroup() {
 	}
 
-	private MergeGroup(Room room, MergeGroupKind kind, List<Menu> menus, Instant now) {
+	private MergeGroup(Room room, MergeGroupKind kind, List<Menu> menus, Menu target, Instant now) {
 		if (menus.size() < MIN_MENUS || menus.stream().map(Menu::getId).distinct().count() != menus.size()) {
 			throw new IllegalArgumentException("합치기 그룹에는 서로 다른 메뉴가 2개 이상 있어야 한다");
 		}
@@ -88,6 +99,7 @@ public class MergeGroup {
 		this.publicId = PublicId.generate();
 		this.kind = kind;
 		this.status = MergeGroupStatus.PENDING;
+		this.target = target;
 		this.createdAt = now;
 		for (Menu menu : menus) {
 			members.add(new MergeGroupMember(this, menu));
@@ -96,7 +108,17 @@ public class MergeGroup {
 
 	/** 자동으로 묶은 그룹. 지금은 이름이 같은 메뉴끼리, 기능 6부터는 AI가 묶는다. */
 	public static MergeGroup auto(Room room, List<Menu> menus, Instant now) {
-		return new MergeGroup(room, MergeGroupKind.AUTO, menus, now);
+		return new MergeGroup(room, MergeGroupKind.AUTO, menus, null, now);
+	}
+
+	/**
+	 * 직접 합치기 요청. 요청한 사람은 요청하면서 이미 "합치기"에 동의한 것이라, 요청받은 사람의 답만 기다린다.
+	 * 요청을 보낼 수 있는지는 {@link MergeRequestRules}로 먼저 확인해야 한다.
+	 */
+	public static MergeGroup direct(Room room, Menu requester, Menu target, Instant now) {
+		MergeGroup request = new MergeGroup(room, MergeGroupKind.DIRECT, List.of(requester, target), target, now);
+		request.answer(requester, true, now);
+		return request;
 	}
 
 	/**
@@ -121,9 +143,9 @@ public class MergeGroup {
 
 	/**
 	 * 결과를 낸다. 답하지 않은 사람은 "합치지 않기"로 본다.
-	 * 동의한 메뉴가 2개 이상이면 그중 하나를 무작위로 대표로 뽑고, 나머지 동의한 메뉴를 대표에 합친다.
+	 * 동의한 메뉴가 2개 이상이면 대표 메뉴 하나만 남기고, 나머지 동의한 메뉴를 대표에 합친다.
 	 *
-	 * @param random 대표를 뽑을 난수. 서버가 뽑아야 화면(클라이언트)에서 결과를 조작할 수 없다
+	 * @param random 자동 그룹의 대표를 뽑을 난수. 서버가 뽑아야 화면(클라이언트)에서 결과를 조작할 수 없다
 	 */
 	public void resolve(RandomGenerator random, Instant now) {
 		if (status != MergeGroupStatus.PENDING) {
@@ -133,7 +155,7 @@ public class MergeGroup {
 		members.forEach(MergeGroupMember::declineIfWaiting);
 		List<Menu> agreed = members.stream().filter(MergeGroupMember::isAgreed).map(MergeGroupMember::getMenu).toList();
 		if (agreed.size() >= MIN_MENUS) {
-			Menu chosen = agreed.get(random.nextInt(agreed.size()));
+			Menu chosen = chooseRepresentative(agreed, random);
 			agreed.stream().filter(menu -> !menu.getId().equals(chosen.getId())).forEach(menu -> menu.mergeInto(chosen));
 			this.representative = chosen;
 			this.status = MergeGroupStatus.MERGED;
@@ -144,8 +166,22 @@ public class MergeGroup {
 		this.resolvedAt = now;
 	}
 
+	/** 자동 그룹은 동의한 메뉴 중 무작위로, 직접 요청은 요청받은 메뉴를 대표로 한다. */
+	private Menu chooseRepresentative(List<Menu> agreed, RandomGenerator random) {
+		if (kind == MergeGroupKind.DIRECT) {
+			return agreed.stream().filter(menu -> menu.getId().equals(target.getId())).findFirst().orElseThrow();
+		}
+		return agreed.get(random.nextInt(agreed.size()));
+	}
+
 	public boolean isPending() {
 		return status == MergeGroupStatus.PENDING;
+	}
+
+	/** 이 메뉴를 낸 사람이 보내고 답을 기다리는 직접 요청인지. */
+	public boolean isSentBy(Menu menu) {
+		return kind == MergeGroupKind.DIRECT && isPending() && !target.getId().equals(menu.getId())
+				&& findMember(menu).isPresent();
 	}
 
 	/** 그룹에 든 메뉴들(합쳐져 사라진 메뉴 포함). */
@@ -186,6 +222,11 @@ public class MergeGroup {
 	/** 합쳐졌을 때 남은 대표 메뉴. 아니면 null */
 	public Menu getRepresentative() {
 		return representative;
+	}
+
+	/** 직접 요청에서 요청받은 메뉴. 자동 그룹이면 null */
+	public Menu getTarget() {
+		return target;
 	}
 
 	public Instant getResolvedAt() {

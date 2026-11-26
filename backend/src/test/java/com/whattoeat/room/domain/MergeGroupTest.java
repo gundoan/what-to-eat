@@ -157,6 +157,59 @@ class MergeGroupTest {
 		assertThat(chosenNames).containsExactlyInAnyOrder("제육볶음", "제육 볶음");
 	}
 
+	@Test
+	@DisplayName("직접 요청은 요청한 사람이 이미 동의한 채로 만들어지고, 요청받은 사람의 답만 기다린다")
+	void directRequestWaitsOnlyForTarget() {
+		Menu requester = menu(1, "할매집 제육");
+		Menu target = menu(2, "제육볶음");
+
+		MergeGroup request = MergeGroup.direct(ROOM, requester, target, NOW);
+
+		assertThat(request.getKind()).isEqualTo(MergeGroupKind.DIRECT);
+		assertThat(request.getTarget()).isSameAs(target);
+		assertThat(request.getAnsweredCount()).isEqualTo(1);
+		assertThat(request.isWaitingFor(requester)).isFalse();
+		assertThat(request.isWaitingFor(target)).isTrue();
+		assertThat(request.isSentBy(requester)).isTrue();
+		assertThat(request.isSentBy(target)).isFalse();
+	}
+
+	@Test
+	@DisplayName("직접 요청이 받아들여지면 난수와 상관없이 항상 요청받은 메뉴가 대표로 남는다")
+	void directRequestKeepsTargetAsRepresentative() {
+		for (int pick = 0; pick < 2; pick++) {
+			Menu requester = menu(1, "할매집 제육");
+			Menu target = menu(2, "제육볶음");
+			MergeGroup request = MergeGroup.direct(ROOM, requester, target, NOW);
+			request.answer(target, true, NOW);
+
+			request.resolve(alwaysPick(pick), NOW);
+
+			assertThat(request.getStatus()).isEqualTo(MergeGroupStatus.MERGED);
+			assertThat(request.getRepresentative()).isSameAs(target);
+			assertThat(requester.getMergedInto()).isSameAs(target);
+			assertThat(target.isMerged()).isFalse();
+			assertThat(request.isSentBy(requester)).as("결과가 나오면 더는 답을 기다리는 요청이 아니다").isFalse();
+		}
+	}
+
+	@Test
+	@DisplayName("직접 요청을 거절하거나 답하지 않으면 합치지 않는다")
+	void declinedOrUnansweredDirectRequestDoesNotMerge() {
+		Menu requester = menu(1, "할매집 제육");
+		Menu target = menu(2, "제육볶음");
+		MergeGroup declined = MergeGroup.direct(ROOM, requester, target, NOW);
+		declined.answer(target, false, NOW);
+		MergeGroup unanswered = MergeGroup.direct(ROOM, menu(3, "김밥"), menu(4, "꼬마김밥"), NOW);
+
+		declined.resolve(new SecureRandom(), NOW);
+		unanswered.resolve(new SecureRandom(), NOW);
+
+		assertThat(declined.getStatus()).isEqualTo(MergeGroupStatus.NOT_MERGED);
+		assertThat(unanswered.getStatus()).isEqualTo(MergeGroupStatus.NOT_MERGED);
+		assertThat(requester.isMerged()).isFalse();
+	}
+
 	private static Menu menu(long id, String name) {
 		Participant owner = Participant.guest(ROOM, "token-hash-" + id, NOW);
 		Menu menu = Menu.propose(ROOM, owner, new MenuName(name), NOW);
