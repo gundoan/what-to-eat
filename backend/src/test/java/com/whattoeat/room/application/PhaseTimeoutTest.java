@@ -105,6 +105,24 @@ class PhaseTimeoutTest {
 		assertThat(state.menus()).hasSize(2);
 	}
 
+	@Test
+	@DisplayName("합치기 시간이 다 되면 답하지 않은 직접 합치기 요청은 '합치지 않기'로 처리된다")
+	void mergeTimeoutDeclinesWaitingRequests() {
+		StartedRoom room = startRoom(1);
+		proposalService.propose(room.code(), room.host(), "김밥");
+		proposalService.propose(room.code(), room.tokens().get(1), "라면"); // 모두 내서 바로 합치기 단계로 간다
+		String target = roomService.getRoom(room.code(), room.tokens().get(1)).me().menuId();
+		mergeService.request(room.code(), room.host(), target);
+		Instant deadline = room(room).getPhaseEndsAt();
+
+		phaseService.advanceExpiredPhases(deadline);
+
+		RoomState state = roomService.getRoom(room.code(), room.host()).room();
+		assertThat(state.status()).isEqualTo(RoomStatus.VOTING);
+		assertThat(onlyGroup(room).status()).isEqualTo(MergeGroupStatus.NOT_MERGED);
+		assertThat(state.menus()).hasSize(2);
+	}
+
 	/** 제안 시간이 30초인 방을 만들고 손님 guestCount명을 들인 뒤 시작한다. */
 	private StartedRoom startRoom(int guestCount) {
 		CreatedRoom created = roomService.create(PhaseDurations.of(30, null, null, null));
