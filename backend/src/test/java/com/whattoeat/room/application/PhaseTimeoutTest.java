@@ -71,12 +71,12 @@ class PhaseTimeoutTest {
 	void doesNotAdvanceTwice() {
 		StartedRoom room = startRoom(0);
 		Instant deadline = room(room).getPhaseEndsAt();
-		// 혼자라서 제안하자마자 넘어가고, 메뉴가 1개라 합치기 없이 투표 단계다.
+		// 혼자라서 제안하자마자 넘어가고, 메뉴가 1개라 합치기도 투표도 없이 바로 결정된다.
 		proposalService.propose(room.code(), room.host(), "제육");
 
 		phaseService.advanceExpiredPhases(deadline.plusSeconds(1));
 
-		assertThat(room(room).getStatus()).isEqualTo(RoomStatus.VOTING);
+		assertThat(room(room).getStatus()).isEqualTo(RoomStatus.FINISHED);
 	}
 
 	@Test

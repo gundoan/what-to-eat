@@ -3,6 +3,7 @@ package com.whattoeat.room.domain;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.time.Instant;
+import java.util.List;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -27,11 +28,11 @@ class ParticipantTest {
 		@Test
 		@DisplayName("메뉴를 냈거나 다 좋음을 눌렀으면 끝낸 것이다")
 		void finishedWhenProposedOrAllGood() {
-			assertThat(participant.hasFinished(RoomStatus.PROPOSING, null)).isFalse();
-			assertThat(participant.hasFinished(RoomStatus.PROPOSING, menu(1))).isTrue();
+			assertThat(participant.hasFinished(RoomStatus.PROPOSING, null, null)).isFalse();
+			assertThat(participant.hasFinished(RoomStatus.PROPOSING, menu(1), null)).isTrue();
 
 			participant.markProposalAllGood();
-			assertThat(participant.hasFinished(RoomStatus.PROPOSING, null)).isTrue();
+			assertThat(participant.hasFinished(RoomStatus.PROPOSING, null, null)).isTrue();
 		}
 
 	}
@@ -44,10 +45,10 @@ class ParticipantTest {
 		@DisplayName("메뉴가 남아 있으면 합치기 끝냄을 눌러야 끝낸 것이다")
 		void menuOwnerMustPressDone() {
 			Menu mine = menu(1);
-			assertThat(participant.hasFinished(RoomStatus.MERGING, mine)).isFalse();
+			assertThat(participant.hasFinished(RoomStatus.MERGING, mine, null)).isFalse();
 
 			participant.markMergeDone();
-			assertThat(participant.hasFinished(RoomStatus.MERGING, mine)).isTrue();
+			assertThat(participant.hasFinished(RoomStatus.MERGING, mine, null)).isTrue();
 		}
 
 		@Test
@@ -56,21 +57,43 @@ class ParticipantTest {
 			Menu mine = menu(1);
 			mine.mergeInto(menu(2));
 
-			assertThat(participant.hasFinished(RoomStatus.MERGING, null)).isTrue();
-			assertThat(participant.hasFinished(RoomStatus.MERGING, mine)).isTrue();
+			assertThat(participant.hasFinished(RoomStatus.MERGING, null, null)).isTrue();
+			assertThat(participant.hasFinished(RoomStatus.MERGING, mine, null)).isTrue();
+		}
+
+	}
+
+	@Nested
+	@DisplayName("투표 단계")
+	class Voting {
+
+		@Test
+		@DisplayName("표를 냈거나 다 좋음을 눌렀으면(투표지를 냈으면) 끝낸 것이다")
+		void finishedWhenBallotSubmitted() {
+			Menu menu = menu(1);
+
+			assertThat(participant.hasFinished(RoomStatus.VOTING, menu, null)).isFalse();
+			assertThat(participant.hasFinished(RoomStatus.VOTING, menu,
+					Ballot.of(room, participant, Ballot.FIRST_ROUND, List.of(new VoteChoice(menu, 1)), NOW)))
+				.isTrue();
+			assertThat(participant.hasFinished(RoomStatus.VOTING, null,
+					Ballot.allGood(room, participant, Ballot.FIRST_ROUND, NOW)))
+				.isTrue();
 		}
 
 	}
 
 	@Test
-	@DisplayName("대기 중과 아직 만들지 않은 단계(투표, 랜덤 선택)에서는 끝낸 것으로 보지 않는다")
+	@DisplayName("대기 중, 아직 만들지 않은 단계(재투표, 랜덤 선택), 끝난 방에서는 끝낸 것으로 보지 않는다")
 	void otherPhasesAreNeverFinished() {
 		participant.markProposalAllGood();
 		participant.markMergeDone();
+		Ballot ballot = Ballot.allGood(room, participant, Ballot.FIRST_ROUND, NOW);
 
-		assertThat(participant.hasFinished(RoomStatus.WAITING, null)).isFalse();
-		assertThat(participant.hasFinished(RoomStatus.VOTING, null)).isFalse();
-		assertThat(participant.hasFinished(RoomStatus.RANDOM_PICK, null)).isFalse();
+		assertThat(participant.hasFinished(RoomStatus.WAITING, null, ballot)).isFalse();
+		assertThat(participant.hasFinished(RoomStatus.REVOTING, null, ballot)).isFalse();
+		assertThat(participant.hasFinished(RoomStatus.RANDOM_PICK, null, ballot)).isFalse();
+		assertThat(participant.hasFinished(RoomStatus.FINISHED, null, ballot)).isFalse();
 	}
 
 	private Menu menu(long id) {

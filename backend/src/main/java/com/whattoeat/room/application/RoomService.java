@@ -15,6 +15,7 @@ import com.whattoeat.room.domain.PhaseDurations;
 import com.whattoeat.room.domain.Room;
 import com.whattoeat.room.domain.RoomCode;
 import com.whattoeat.room.domain.RoomRepository;
+import com.whattoeat.room.domain.RoomStatus;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -69,6 +70,10 @@ public class RoomService {
 			return new JoinResult(assembler.view(room, existing.get()), null);
 		}
 
+		// 늦게 온 사람도 투표가 끝나기 전이면 들어올 수 있다. 메뉴가 결정된 뒤에는 이미 참여한 사람만 결과를 볼 수 있다.
+		if (room.getStatus() == RoomStatus.FINISHED) {
+			throw new BusinessException(ErrorCode.VOTING_ENDED);
+		}
 		if (room.isFull(participantRepository.countByRoom(room))) {
 			throw new BusinessException(ErrorCode.ROOM_FULL);
 		}

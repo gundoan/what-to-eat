@@ -178,7 +178,7 @@ class ProposalApiTest {
 
 			api.nextPhase(room.code(), room.host(), "WAITING");
 			api.propose(room.code(), room.host(), "김밥");
-			api.nextPhase(room.code(), room.host(), "PROPOSING").andExpect(jsonPath("$.room.status").value("VOTING"));
+			api.nextPhase(room.code(), room.host(), "PROPOSING").andExpect(jsonPath("$.room.status").value("FINISHED"));
 
 			api.propose(room.code(), guest, "제육").andExpect(status().isConflict());
 			api.allGood(room.code(), guest).andExpect(status().isConflict());
@@ -282,24 +282,25 @@ class ProposalApiTest {
 		}
 
 		@Test
-		@DisplayName("메뉴가 하나뿐이면 합칠 상대가 없어서 합치기 없이 바로 투표 단계로 간다")
-		void skipsMergingWithSingleMenu() throws Exception {
+		@DisplayName("메뉴가 하나뿐이면 합치기도 투표도 없이 바로 그 메뉴로 결정된다")
+		void decidesSingleMenuRightAway() throws Exception {
 			TestRoom room = startedRoomWithGuests(1);
 			api.allGood(room.code(), guests.getFirst());
 
 			api.propose(room.code(), room.host(), "제육")
-				.andExpect(jsonPath("$.room.status").value("VOTING"))
-				.andExpect(jsonPath("$.room.menus[*].name", contains("제육")))
+				.andExpect(jsonPath("$.room.status").value("FINISHED"))
+				.andExpect(jsonPath("$.room.resultMenu.name").value("제육"))
+				.andExpect(jsonPath("$.room.voteScores", empty()))
 				.andExpect(jsonPath("$.room.mergeGroups", empty()));
 		}
 
 		@Test
-		@DisplayName("투표 단계의 다음 단계는 아직 없어서 방장도 넘길 수 없다")
-		void noNextPhaseAfterVotingYet() throws Exception {
+		@DisplayName("메뉴가 결정된 뒤에는 다음 단계가 없어서 방장도 넘길 수 없다")
+		void noNextPhaseAfterFinished() throws Exception {
 			TestRoom room = startedRoomWithGuests(0);
-			api.propose(room.code(), room.host(), "제육").andExpect(jsonPath("$.room.status").value("VOTING"));
+			api.propose(room.code(), room.host(), "제육").andExpect(jsonPath("$.room.status").value("FINISHED"));
 
-			api.nextPhase(room.code(), room.host(), "VOTING")
+			api.nextPhase(room.code(), room.host(), "FINISHED")
 				.andExpect(status().isConflict())
 				.andExpect(jsonPath("$.code").value("NO_NEXT_PHASE"));
 		}
