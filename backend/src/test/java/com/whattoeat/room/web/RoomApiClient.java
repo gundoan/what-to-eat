@@ -9,8 +9,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 import com.jayway.jsonpath.JsonPath;
 import jakarta.servlet.http.Cookie;
@@ -88,6 +90,34 @@ final class RoomApiClient {
 			.content("{\"targetMenuId\": " + jsonString(targetMenuId) + "}"));
 	}
 
+	/** 투표지를 JSON 그대로 낸다. 규칙을 어기는 투표지를 보내 볼 때 쓴다. */
+	ResultActions ballot(String code, Cookie cookie, String json) throws Exception {
+		return mockMvc.perform(put("/api/rooms/" + code + "/me/ballot").cookie(cookie)
+			.contentType(MediaType.APPLICATION_JSON)
+			.content(json));
+	}
+
+	/** 표를 낸다. 예: vote(code, cookie, Map.of(김밥 번호, 1, 라면 번호, -1)) */
+	ResultActions vote(String code, Cookie cookie, Map<String, Integer> pointsByMenuId) throws Exception {
+		String votes = pointsByMenuId.entrySet()
+			.stream()
+			.map(entry -> "{\"menuId\": \"" + entry.getKey() + "\", \"point\": " + entry.getValue() + "}")
+			.collect(Collectors.joining(", "));
+		return ballot(code, cookie, "{\"votes\": [" + votes + "]}");
+	}
+
+	/** 투표의 "다 좋음"(투표하지 않음) */
+	ResultActions voteAllGood(String code, Cookie cookie) throws Exception {
+		return ballot(code, cookie, "{\"allGood\": true}");
+	}
+
+	/** 남은 메뉴 중 이름이 name인 메뉴의 번호. 테스트에서는 이름이 겹치지 않게 만든다. */
+	String menuIdNamed(String code, Cookie cookie, String name) throws Exception {
+		List<String> ids = read(code, cookie, "$.room.menus[?(@.name == '" + name + "')].id");
+		assertThat(ids).as("'" + name + "' 메뉴가 하나 있어야 한다").hasSize(1);
+		return ids.getFirst();
+	}
+
 	/** 방을 조회해서 응답 본문(JSON)을 돌려준다. */
 	String roomJson(String code, Cookie cookie) throws Exception {
 		return getRoom(code, cookie).andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
@@ -118,6 +148,19 @@ final class RoomApiClient {
 		return new MergingRoom(room.code(), people);
 	}
 
+	/**
+	 * 각자 메뉴를 하나씩 내고 모두 "합치기 끝냄"을 눌러 투표 단계가 된 방을 만든다. 메뉴 이름은 겹치지 않게 넣는다.
+	 * menus[i]를 낸 사람이 person(i)이고, 첫 번째가 방장이다.
+	 */
+	VotingRoom votingRoom(String createBody, String... menus) throws Exception {
+		MergingRoom merging = mergingRoom(createBody, menus);
+		for (Cookie person : merging.people()) {
+			finishMerge(merging.code(), person).andExpect(status().isOk());
+		}
+		getRoom(merging.code(), merging.host()).andExpect(jsonPath("$.room.status").value("VOTING"));
+		return new VotingRoom(merging.code(), merging.people());
+	}
+
 	private static Cookie cookieOf(MvcResult result) {
 		Cookie cookie = result.getResponse().getCookie(ParticipantCookie.NAME);
 		assertThat(cookie).as("참여자 쿠키를 받아야 한다").isNotNull();
@@ -137,6 +180,18 @@ final class RoomApiClient {
 	}
 
 	record MergingRoom(String code, List<Cookie> people) {
+
+		Cookie host() {
+			return people.getFirst();
+		}
+
+		Cookie person(int index) {
+			return people.get(index);
+		}
+
+	}
+
+	record VotingRoom(String code, List<Cookie> people) {
 
 		Cookie host() {
 			return people.getFirst();
