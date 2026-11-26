@@ -6,9 +6,12 @@ import static org.assertj.core.api.Assertions.assertThat;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.Callable;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.IntFunction;
 
 import com.whattoeat.IntegrationTest;
+import com.whattoeat.common.error.BusinessException;
+import com.whattoeat.common.error.ErrorCode;
 import com.whattoeat.room.application.RoomResults.CreatedRoom;
 import com.whattoeat.room.domain.MergeGroupStatus;
 import com.whattoeat.room.domain.PhaseDurations;
@@ -75,6 +78,58 @@ class MergeConcurrencyTest {
 		RoomState state = state(room);
 		assertThat(state.status()).isEqualTo(RoomStatus.VOTING);
 		assertThat(state.menus()).hasSize(Room.MAX_PARTICIPANTS);
+	}
+
+	@Test
+	@DisplayName("10명이 같은 메뉴에 동시에 직접 합치기를 요청해도 하나만 성공하고, 나머지는 '진행 중인 합치기'로 거절된다")
+	void concurrentRequestsToSameMenuCreateOnlyOne() throws Exception {
+		MergingRoom room = mergingRoom(11, i -> "메뉴" + i);
+		String target = roomService.getRoom(room.code(), room.tokens().getFirst()).me().menuId();
+		AtomicInteger succeeded = new AtomicInteger();
+		AtomicInteger rejected = new AtomicInteger();
+
+		List<Callable<Void>> requests = new ArrayList<>();
+		for (String token : room.tokens().subList(1, 11)) {
+			requests.add(requestCounting(room, token, target, succeeded, rejected));
+		}
+		runAllAtOnce(requests);
+
+		assertThat(succeeded).hasValue(1);
+		assertThat(rejected).hasValue(9);
+		assertThat(state(room).mergeGroups()).hasSize(1);
+	}
+
+	@Test
+	@DisplayName("두 메뉴가 서로에게 동시에 직접 합치기를 요청해도 요청은 하나만 생긴다")
+	void crossRequestsCreateOnlyOne() throws Exception {
+		MergingRoom room = mergingRoom(2, i -> "메뉴" + i);
+		String first = roomService.getRoom(room.code(), room.tokens().get(0)).me().menuId();
+		String second = roomService.getRoom(room.code(), room.tokens().get(1)).me().menuId();
+		AtomicInteger succeeded = new AtomicInteger();
+		AtomicInteger rejected = new AtomicInteger();
+
+		runAllAtOnce(List.of(requestCounting(room, room.tokens().get(0), second, succeeded, rejected),
+				requestCounting(room, room.tokens().get(1), first, succeeded, rejected)));
+
+		assertThat(succeeded).hasValue(1);
+		assertThat(rejected).hasValue(1);
+		assertThat(state(room).mergeGroups()).hasSize(1);
+	}
+
+	/** 요청을 보내고, 성공하면 succeeded를, "진행 중인 합치기"로 거절되면 rejected를 센다. 다른 예외는 테스트를 실패시킨다. */
+	private Callable<Void> requestCounting(MergingRoom room, String token, String target, AtomicInteger succeeded,
+			AtomicInteger rejected) {
+		return () -> {
+			try {
+				mergeService.request(room.code(), token, target);
+				succeeded.incrementAndGet();
+			}
+			catch (BusinessException e) {
+				assertThat(e.errorCode()).isEqualTo(ErrorCode.MENU_BUSY);
+				rejected.incrementAndGet();
+			}
+			return null;
+		};
 	}
 
 	/** people명이 각자 메뉴를 내서 합치기 단계가 된 방. 첫 번째 토큰이 방장이다. */

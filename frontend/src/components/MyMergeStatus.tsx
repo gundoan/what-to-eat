@@ -1,12 +1,15 @@
-import type { Me } from '../types/room'
+import type { Me, MergeGroup } from '../types/room'
+import { requestParts } from '../utils/mergeGroup'
 
 type Props = {
   me: Me
+  /** 내가 보내고 답을 기다리는 직접 요청 */
+  sentRequest: MergeGroup | undefined
   onFinish: () => void
 }
 
 /** 합치기 단계에서 내 메뉴가 어떻게 됐는지와 "합치기 끝냄" 버튼. */
-export function MyMergeStatus({ me, onFinish }: Props) {
+export function MyMergeStatus({ me, sentRequest, onFinish }: Props) {
   if (me.proposal === null) {
     return <p>메뉴를 내지 않아서 합칠 게 없어요. 투표를 기다려 주세요.</p>
   }
@@ -19,6 +22,20 @@ export function MyMergeStatus({ me, onFinish }: Props) {
   }
   if (me.done) {
     return <p>합치기를 끝냈어요. 다른 사람을 기다리는 중이에요.</p>
+  }
+  if (sentRequest) {
+    // 보낸 요청의 답은 상대가 할 일이고 취소도 안 되므로, 답이 나올 때까지 끝낼 수 없다.
+    return (
+      <section>
+        <p>
+          내 메뉴를 &apos;{requestParts(sentRequest)?.to.name}&apos;에 합치자고 요청했어요. 답을 기다리는 중이에요.
+        </p>
+        <p className="hint">답이 나오면 합치기를 끝낼 수 있어요.</p>
+        <button type="button" disabled>
+          합치기 끝냄
+        </button>
+      </section>
+    )
   }
   return (
     <section>

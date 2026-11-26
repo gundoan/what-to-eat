@@ -16,6 +16,7 @@ import java.util.Map;
 
 import com.jayway.jsonpath.JsonPath;
 import com.whattoeat.IntegrationTest;
+import com.whattoeat.room.web.RoomApiClient.MergingRoom;
 import com.whattoeat.room.web.RoomApiClient.TestRoom;
 import jakarta.servlet.http.Cookie;
 import org.junit.jupiter.api.BeforeEach;
@@ -340,45 +341,23 @@ class MergeApiTest {
 		String body = api.roomJson(room.code(), room.person(1));
 
 		Map<String, Object> group = JsonPath.read(body, "$.room.mergeGroups[0]");
-		assertThat(group).containsOnlyKeys("id", "status", "menus", "representative", "answeredCount");
+		assertThat(group).containsOnlyKeys("id", "kind", "status", "menus", "targetMenuId", "representative",
+				"answeredCount");
 		List<Map<String, Object>> menus = JsonPath.read(body, "$.room.mergeGroups[0].menus");
 		assertThat(menus).allSatisfy(menu -> assertThat(menu).containsOnlyKeys("id", "name"));
 	}
 
 	/** 각자 메뉴를 하나씩 내서 합치기 단계가 된 방. menus[i]를 낸 사람이 person(i)이고, 첫 번째가 방장이다. */
 	private MergingRoom mergingRoom(String... menus) throws Exception {
-		return mergingRoomWith(null, menus);
+		return api.mergingRoom(null, menus);
 	}
 
 	private MergingRoom mergingRoomWith(String createBody, String... menus) throws Exception {
-		TestRoom room = api.createRoom(createBody);
-		List<Cookie> people = new ArrayList<>(List.of(room.host()));
-		for (int i = 1; i < menus.length; i++) {
-			people.add(api.join(room.code()));
-		}
-		api.nextPhase(room.code(), room.host(), "WAITING").andExpect(status().isOk());
-		for (int i = 0; i < menus.length; i++) {
-			api.propose(room.code(), people.get(i), menus[i]).andExpect(status().isOk());
-		}
-		// 모두 메뉴를 냈으므로 바로 합치기 단계로 넘어갔다.
-		api.getRoom(room.code(), room.host()).andExpect(jsonPath("$.room.status").value("MERGING"));
-		return new MergingRoom(room.code(), people);
+		return api.mergingRoom(createBody, menus);
 	}
 
 	private String pendingGroupOf(MergingRoom room, int person) throws Exception {
-		return JsonPath.read(api.roomJson(room.code(), room.person(person)), "$.me.pendingGroupId");
-	}
-
-	private record MergingRoom(String code, List<Cookie> people) {
-
-		Cookie host() {
-			return people.getFirst();
-		}
-
-		Cookie person(int index) {
-			return people.get(index);
-		}
-
+		return api.read(room.code(), room.person(person), "$.me.pendingGroupId");
 	}
 
 }

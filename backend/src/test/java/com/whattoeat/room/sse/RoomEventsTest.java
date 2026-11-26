@@ -122,6 +122,33 @@ class RoomEventsTest {
 	}
 
 	@Test
+	@DisplayName("직접 합치기 요청을 받으면, 받은 사람의 SSE로 바로 질문이 온다")
+	void targetReceivesRequestThroughSse() throws Exception {
+		HttpResponse<String> created = post("/api/rooms", null);
+		String code = codeOf(created.body());
+		String hostCookie = cookieOf(created);
+		String guestCookie = cookieOf(post("/api/rooms/" + code + "/participants", null));
+		send("POST", "/api/rooms/" + code + "/next-phase", hostCookie, "{\"from\": \"WAITING\"}");
+		send("PUT", "/api/rooms/" + code + "/me/proposal", hostCookie, "{\"menuName\": \"할매집 제육\"}");
+		String merging = send("PUT", "/api/rooms/" + code + "/me/proposal", guestCookie,
+				"{\"menuName\": \"제육볶음\"}").body();
+		String guestMenuId = JsonPath.read(merging, "$.me.menuId");
+
+		try (SseTestConnection guestEvents = connect(code, guestCookie)) {
+			guestEvents.nextEventData(RoomEventBroadcaster.ROOM_EVENT, WAIT);
+
+			assertThat(send("POST", "/api/rooms/" + code + "/me/merge-requests", hostCookie,
+					"{\"targetMenuId\": \"" + guestMenuId + "\"}")
+				.statusCode()).isEqualTo(200);
+
+			String received = guestEvents.nextEventData(RoomEventBroadcaster.ROOM_EVENT, WAIT);
+			assertThat(JsonPath.<String>read(received, "$.room.mergeGroups[0].kind")).isEqualTo("DIRECT");
+			assertThat(JsonPath.<String>read(received, "$.me.pendingGroupId"))
+				.isEqualTo(JsonPath.read(received, "$.room.mergeGroups[0].id"));
+		}
+	}
+
+	@Test
 	@DisplayName("방 참여자가 아니면 SSE에 연결할 수 없다")
 	void rejectsNonParticipant() throws Exception {
 		String code = codeOf(post("/api/rooms", null).body());

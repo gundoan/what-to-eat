@@ -73,3 +73,10 @@ input {
   display: flex;
   gap: 8px;
 }
+
+button.inline {
+  width: auto;
+  margin: 0 0 0 8px;
+  padding: 4px 8px;
+  font-size: 0.875rem;
+}

@@ -96,6 +96,19 @@ public class Menu {
 		return mergedInto != null;
 	}
 
+	/**
+	 * 이 메뉴가 최종적으로 들어간 메뉴. 합쳐지지 않았으면 자기 자신이다.
+	 * 대표 메뉴도 나중에 직접 합치기로 다른 메뉴에 합쳐질 수 있어서(A → B, 다시 B → C), 끝까지 따라간다.
+	 * 남아 있는 메뉴끼리만 합칠 수 있으므로 고리가 생기지 않는다.
+	 */
+	public Menu finalMenu() {
+		Menu current = this;
+		while (current.getMergedInto() != null) {
+			current = current.getMergedInto();
+		}
+		return current;
+	}
+
 	public Long getId() {
 		return id;
 	}

@@ -4,11 +4,15 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import com.jayway.jsonpath.JsonPath;
 import jakarta.servlet.http.Cookie;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
@@ -78,9 +82,40 @@ final class RoomApiClient {
 		return mockMvc.perform(post("/api/rooms/" + code + "/me/merge-done").cookie(cookie));
 	}
 
+	ResultActions requestMerge(String code, Cookie cookie, String targetMenuId) throws Exception {
+		return mockMvc.perform(post("/api/rooms/" + code + "/me/merge-requests").cookie(cookie)
+			.contentType(MediaType.APPLICATION_JSON)
+			.content("{\"targetMenuId\": " + jsonString(targetMenuId) + "}"));
+	}
+
 	/** 방을 조회해서 응답 본문(JSON)을 돌려준다. */
 	String roomJson(String code, Cookie cookie) throws Exception {
 		return getRoom(code, cookie).andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+	}
+
+	/** 방을 조회해서 JSON 안의 값 하나를 꺼낸다. 예: read(code, cookie, "$.me.menuId") */
+	<T> T read(String code, Cookie cookie, String jsonPath) throws Exception {
+		return JsonPath.read(roomJson(code, cookie), jsonPath);
+	}
+
+	/**
+	 * 각자 메뉴를 하나씩 내서 합치기 단계가 된 방을 만든다. menus[i]를 낸 사람이 person(i)이고, 첫 번째가 방장이다.
+	 *
+	 * @param createBody 방 만들기 요청 본문(단계 시간). null이면 모두 1분
+	 */
+	MergingRoom mergingRoom(String createBody, String... menus) throws Exception {
+		TestRoom room = createRoom(createBody);
+		List<Cookie> people = new ArrayList<>(List.of(room.host()));
+		for (int i = 1; i < menus.length; i++) {
+			people.add(join(room.code()));
+		}
+		nextPhase(room.code(), room.host(), "WAITING").andExpect(status().isOk());
+		for (int i = 0; i < menus.length; i++) {
+			propose(room.code(), people.get(i), menus[i]).andExpect(status().isOk());
+		}
+		// 모두 메뉴를 냈으므로 바로 합치기 단계로 넘어갔다.
+		getRoom(room.code(), room.host()).andExpect(jsonPath("$.room.status").value("MERGING"));
+		return new MergingRoom(room.code(), people);
 	}
 
 	private static Cookie cookieOf(MvcResult result) {
@@ -99,6 +134,18 @@ final class RoomApiClient {
 	}
 
 	record TestRoom(String code, Cookie host) {
+	}
+
+	record MergingRoom(String code, List<Cookie> people) {
+
+		Cookie host() {
+			return people.getFirst();
+		}
+
+		Cookie person(int index) {
+			return people.get(index);
+		}
+
 	}
 
 }

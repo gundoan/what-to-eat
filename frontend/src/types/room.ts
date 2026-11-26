@@ -18,12 +18,18 @@ export type MenuItem = {
 /** PENDING: 답을 기다리는 중, MERGED: 합쳐짐, NOT_MERGED: 합치지 않음 */
 export type MergeGroupStatus = 'PENDING' | 'MERGED' | 'NOT_MERGED'
 
+/** AUTO: 이름이 같아서 자동으로 묶은 그룹, DIRECT: 참여자가 직접 보낸 합치기 요청 */
+export type MergeGroupKind = 'AUTO' | 'DIRECT'
+
 /** 합치기 그룹: "이 메뉴들을 합칠까요?"라는 질문 하나. 누가 어떻게 답했는지는 없고, 답한 사람 수만 있다. */
 export type MergeGroup = {
   id: string
+  kind: MergeGroupKind
   status: MergeGroupStatus
   /** 그룹에 든 메뉴(합쳐져 사라진 메뉴 포함), 가나다순 */
   menus: MenuItem[]
+  /** 직접 요청에서 요청받은 메뉴의 번호. 나머지 하나가 요청한 메뉴다. 자동 그룹이면 null */
+  targetMenuId: string | null
   /** 합쳐졌을 때 남은 대표 메뉴 이름. 아니면 null */
   representative: string | null
   answeredCount: number
@@ -55,10 +61,14 @@ export type Me = {
   allGood: boolean
   /** 남아 있는 내 메뉴의 공개 번호. 메뉴가 없거나 다른 메뉴에 합쳐졌으면 null */
   menuId: string | null
-  /** 내 메뉴가 합쳐진 대표 메뉴 이름 */
+  /** 내 메뉴가 최종적으로 합쳐진 메뉴 이름 */
   mergedInto: string | null
-  /** 내 답을 기다리는 합치기 그룹의 번호 */
+  /** 내 답을 기다리는 합치기 그룹(자동 그룹이나 내가 받은 직접 요청)의 번호 */
   pendingGroupId: string | null
+  /** 내가 보내고 상대의 답을 기다리는 직접 요청의 번호 */
+  sentGroupId: string | null
+  /** 지금 내가 직접 합치기를 요청할 수 있는 메뉴들의 번호 */
+  requestableMenuIds: string[]
   /** 지금 단계(제안, 합치기)에서 할 일을 끝냈는지 */
   done: boolean
 }

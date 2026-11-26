@@ -17,7 +17,15 @@ public enum ErrorCode {
 	NOT_MERGE_PHASE(HttpStatus.CONFLICT, "지금은 메뉴를 합칠 수 있는 단계가 아닙니다."),
 	MERGE_GROUP_NOT_FOUND(HttpStatus.NOT_FOUND, "합치기 질문을 찾을 수 없습니다."),
 	NOT_MERGE_MEMBER(HttpStatus.FORBIDDEN, "이 합치기 질문을 받은 사람만 답할 수 있습니다."),
-	ALREADY_ANSWERED(HttpStatus.CONFLICT, "이미 답했습니다. 한 번 한 답은 바꿀 수 없습니다.");
+	ALREADY_ANSWERED(HttpStatus.CONFLICT, "이미 답했습니다. 한 번 한 답은 바꿀 수 없습니다."),
+	NO_MENU_TO_MERGE(HttpStatus.CONFLICT, "남아 있는 내 메뉴가 없어서 합치기를 요청할 수 없습니다."),
+	MERGE_ALREADY_FINISHED(HttpStatus.CONFLICT, "합치기를 끝낸 뒤에는 합치기를 요청할 수 없습니다."),
+	MENU_NOT_FOUND(HttpStatus.NOT_FOUND, "메뉴를 찾을 수 없습니다."),
+	CANNOT_MERGE_WITH_OWN_MENU(HttpStatus.BAD_REQUEST, "내 메뉴에는 합치기를 요청할 수 없습니다."),
+	TARGET_FINISHED_MERGING(HttpStatus.CONFLICT, "이 메뉴의 제안자는 합치기를 끝내서 요청을 받을 수 없습니다."),
+	MENU_BUSY(HttpStatus.CONFLICT, "결과가 안 나온 합치기에 든 메뉴라서 지금은 요청할 수 없습니다."),
+	ALREADY_DECLINED(HttpStatus.CONFLICT, "이 메뉴와는 이미 합치지 않기로 했습니다."),
+	WAITING_FOR_REQUEST_ANSWER(HttpStatus.CONFLICT, "보낸 요청의 답을 기다리는 중이라 아직 합치기를 끝낼 수 없습니다.");
 
 	private final HttpStatus status;
 	private final String message;

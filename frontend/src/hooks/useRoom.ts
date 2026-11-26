@@ -1,5 +1,14 @@
 import { useEffect, useState } from 'react'
-import { allGood, answerMerge, finishMerge, joinRoom, nextPhase, propose, subscribeRoom } from '../api/rooms'
+import {
+  allGood,
+  answerMerge,
+  finishMerge,
+  joinRoom,
+  nextPhase,
+  propose,
+  requestMerge,
+  subscribeRoom,
+} from '../api/rooms'
 import { ApiError } from '../api/client'
 import type { Me, RoomState, RoomView } from '../types/room'
 
@@ -23,6 +32,8 @@ export type RoomActions = {
   nextPhase: () => void
   propose: (menuName: string) => void
   allGood: () => void
+  /** 내 메뉴를 다른 메뉴에 합치자고 요청한다 */
+  requestMerge: (targetMenuId: string) => void
   /** 합치기 질문에 답한다. agree가 true면 합치기 */
   answerMerge: (groupId: string, agree: boolean) => void
   /** "합치기 끝냄" */
@@ -80,6 +91,7 @@ export function useRoom(code: string) {
     },
     propose: (menuName) => void run(() => propose(code, menuName)),
     allGood: () => void run(() => allGood(code)),
+    requestMerge: (targetMenuId) => void run(() => requestMerge(code, targetMenuId)),
     answerMerge: (groupId, agree) => void run(() => answerMerge(code, groupId, agree)),
     finishMerge: () => void run(() => finishMerge(code)),
   }
