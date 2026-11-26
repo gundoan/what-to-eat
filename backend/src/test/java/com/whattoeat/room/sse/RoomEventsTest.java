@@ -7,9 +7,11 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
+import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import com.jayway.jsonpath.JsonPath;
 import com.whattoeat.IntegrationTest;
 import com.whattoeat.room.web.ParticipantCookie;
 import org.junit.jupiter.api.DisplayName;
@@ -32,50 +34,90 @@ class RoomEventsTest {
 	private final HttpClient http = HttpClient.newHttpClient();
 
 	@Test
-	@DisplayName("SSE로 연결하면 현재 방 상태를 바로 받고, 누가 들어오면 바뀐 인원 수를 받는다")
+	@DisplayName("SSE로 연결하면 현재 화면 정보를 바로 받고, 누가 들어오면 바뀐 인원 수를 받는다")
 	void receivesCurrentStateThenUpdatesWhenSomeoneJoins() throws Exception {
 		HttpResponse<String> created = post("/api/rooms", null);
 		String code = codeOf(created.body());
 		String hostCookie = cookieOf(created);
 
-		try (SseTestConnection events = SseTestConnection.open(http, uri("/api/rooms/" + code + "/events"),
-				hostCookie)) {
+		try (SseTestConnection events = connect(code, hostCookie)) {
 			String initial = events.nextEventData(RoomEventBroadcaster.ROOM_EVENT, WAIT);
-			assertThat(initial).contains("\"code\":\"" + code + "\"").contains("\"participantCount\":1");
+			assertThat(JsonPath.<String>read(initial, "$.room.code")).isEqualTo(code);
+			assertThat(JsonPath.<Integer>read(initial, "$.room.participantCount")).isEqualTo(1);
 
 			HttpResponse<String> joined = post("/api/rooms/" + code + "/participants", null);
 			assertThat(joined.statusCode()).isEqualTo(201);
 
 			String updated = events.nextEventData(RoomEventBroadcaster.ROOM_EVENT, WAIT);
-			assertThat(updated).contains("\"participantCount\":2");
-			// 모두에게 같은 내용이 가므로, 누가 방장인지 같은 개인 정보가 들어 있으면 안 된다.
-			assertThat(updated).doesNotContain("\"host\"").doesNotContain("\"me\"");
+			assertThat(JsonPath.<Integer>read(updated, "$.room.participantCount")).isEqualTo(2);
 		}
 	}
 
 	@Test
-	@DisplayName("방장이 시작하면 제안 단계 상태를, 누가 메뉴를 내면 바뀐 메뉴 목록을 SSE로 받는다")
-	void receivesPhaseChangeAndMenus() throws Exception {
+	@DisplayName("SSE로 받는 내 정보(me)는 연결을 연 사람 본인 것이고, 다른 사람의 정보는 오지 않는다")
+	void eachConnectionReceivesOnlyItsOwnInfo() throws Exception {
 		HttpResponse<String> created = post("/api/rooms", null);
 		String code = codeOf(created.body());
 		String hostCookie = cookieOf(created);
 		String guestCookie = cookieOf(post("/api/rooms/" + code + "/participants", null));
+		assertThat(send("POST", "/api/rooms/" + code + "/next-phase", hostCookie, "{\"from\": \"WAITING\"}")
+			.statusCode()).isEqualTo(200);
 
-		try (SseTestConnection events = SseTestConnection.open(http, uri("/api/rooms/" + code + "/events"),
-				guestCookie)) {
-			events.nextEventData(RoomEventBroadcaster.ROOM_EVENT, WAIT); // 연결 직후의 현재 상태
+		try (SseTestConnection hostEvents = connect(code, hostCookie);
+				SseTestConnection guestEvents = connect(code, guestCookie)) {
+			hostEvents.nextEventData(RoomEventBroadcaster.ROOM_EVENT, WAIT); // 연결 직후의 현재 상태
+			guestEvents.nextEventData(RoomEventBroadcaster.ROOM_EVENT, WAIT);
 
-			assertThat(send("POST", "/api/rooms/" + code + "/next-phase", hostCookie, "{\"from\": \"WAITING\"}")
+			assertThat(send("PUT", "/api/rooms/" + code + "/me/proposal", guestCookie, "{\"menuName\": \"김밥\"}")
 				.statusCode()).isEqualTo(200);
-			String started = events.nextEventData(RoomEventBroadcaster.ROOM_EVENT, WAIT);
-			assertThat(started).contains("\"status\":\"PROPOSING\"").contains("\"phaseEndsAt\":\"");
 
-			assertThat(send("PUT", "/api/rooms/" + code + "/me/proposal", hostCookie, "{\"menuName\": \"제육\"}")
-				.statusCode()).isEqualTo(200);
-			String proposed = events.nextEventData(RoomEventBroadcaster.ROOM_EVENT, WAIT);
-			assertThat(proposed).contains("\"menus\":[\"제육\"]").contains("\"doneCount\":1");
-			// 누가 냈는지는 SSE에도 없다.
-			assertThat(proposed).doesNotContain("\"proposal\"").doesNotContain("\"host\"");
+			String toHost = hostEvents.nextEventData(RoomEventBroadcaster.ROOM_EVENT, WAIT);
+			String toGuest = guestEvents.nextEventData(RoomEventBroadcaster.ROOM_EVENT, WAIT);
+			// 방 상태는 둘 다 같다.
+			assertThat(JsonPath.<List<String>>read(toHost, "$.room.menus[*].name")).containsExactly("김밥");
+			assertThat(JsonPath.<List<String>>read(toGuest, "$.room.menus[*].name")).containsExactly("김밥");
+			// 내 정보는 각자 자기 것만 온다. 방장 연결에는 손님이 낸 메뉴가, 손님 연결에는 방장이라는 사실이 없다.
+			assertThat(JsonPath.<Boolean>read(toHost, "$.me.host")).isTrue();
+			assertThat(JsonPath.<String>read(toHost, "$.me.proposal")).isNull();
+			assertThat(JsonPath.<Boolean>read(toGuest, "$.me.host")).isFalse();
+			assertThat(JsonPath.<String>read(toGuest, "$.me.proposal")).isEqualTo("김밥");
+		}
+	}
+
+	@Test
+	@DisplayName("다른 사람이 마지막으로 답해서 내 그룹의 결과가 나오면, 그 결과와 바뀐 내 정보를 SSE로 받는다")
+	void receivesMergeResultCausedBySomeoneElse() throws Exception {
+		HttpResponse<String> created = post("/api/rooms", null);
+		String code = codeOf(created.body());
+		String hostCookie = cookieOf(created);
+		String guestCookie = cookieOf(post("/api/rooms/" + code + "/participants", null));
+		send("POST", "/api/rooms/" + code + "/next-phase", hostCookie, "{\"from\": \"WAITING\"}");
+		send("PUT", "/api/rooms/" + code + "/me/proposal", hostCookie, "{\"menuName\": \"제육볶음\"}");
+		String merging = send("PUT", "/api/rooms/" + code + "/me/proposal", guestCookie,
+				"{\"menuName\": \"제육 볶음\"}").body();
+		String groupId = JsonPath.read(merging, "$.room.mergeGroups[0].id");
+
+		try (SseTestConnection guestEvents = connect(code, guestCookie)) {
+			guestEvents.nextEventData(RoomEventBroadcaster.ROOM_EVENT, WAIT);
+			send("PUT", "/api/rooms/" + code + "/me/merge-answers/" + groupId, guestCookie, "{\"agree\": true}");
+			guestEvents.nextEventData(RoomEventBroadcaster.ROOM_EVENT, WAIT); // 내 답이 반영된 상태
+
+			send("PUT", "/api/rooms/" + code + "/me/merge-answers/" + groupId, hostCookie, "{\"agree\": true}");
+
+			String result = guestEvents.nextEventData(RoomEventBroadcaster.ROOM_EVENT, WAIT);
+			assertThat(JsonPath.<String>read(result, "$.room.mergeGroups[0].status")).isEqualTo("MERGED");
+			assertThat(JsonPath.<List<Object>>read(result, "$.room.menus")).hasSize(1);
+			// 대표로 뽑혔으면 내 메뉴가 남고, 아니면 대표 메뉴에 합쳐졌다는 것을 받는다(대표는 무작위).
+			String myMenuId = JsonPath.read(result, "$.me.menuId");
+			String mergedInto = JsonPath.read(result, "$.me.mergedInto");
+			if (myMenuId == null) {
+				assertThat(mergedInto).isEqualTo("제육볶음");
+				assertThat(JsonPath.<Boolean>read(result, "$.me.done")).isTrue();
+			}
+			else {
+				assertThat(myMenuId).isEqualTo(JsonPath.read(result, "$.room.menus[0].id"));
+				assertThat(mergedInto).isNull();
+			}
 		}
 	}
 
@@ -91,6 +133,10 @@ class RoomEventsTest {
 			.build(), HttpResponse.BodyHandlers.ofString());
 
 		assertThat(response.statusCode()).isEqualTo(403);
+	}
+
+	private SseTestConnection connect(String code, String cookie) throws Exception {
+		return SseTestConnection.open(http, uri("/api/rooms/" + code + "/events"), cookie);
 	}
 
 	private HttpResponse<String> post(String path, String cookie) throws Exception {

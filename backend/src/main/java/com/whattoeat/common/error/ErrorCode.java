@@ -13,7 +13,11 @@ public enum ErrorCode {
 	ROOM_FULL(HttpStatus.CONFLICT, "방 정원이 가득 찼습니다."),
 	PHASE_ALREADY_CHANGED(HttpStatus.CONFLICT, "이미 다음 단계로 넘어갔습니다."),
 	NO_NEXT_PHASE(HttpStatus.CONFLICT, "이 단계에서는 아직 다음 단계로 넘어갈 수 없습니다."),
-	NOT_PROPOSAL_PHASE(HttpStatus.CONFLICT, "지금은 메뉴를 제안할 수 있는 단계가 아닙니다.");
+	NOT_PROPOSAL_PHASE(HttpStatus.CONFLICT, "지금은 메뉴를 제안할 수 있는 단계가 아닙니다."),
+	NOT_MERGE_PHASE(HttpStatus.CONFLICT, "지금은 메뉴를 합칠 수 있는 단계가 아닙니다."),
+	MERGE_GROUP_NOT_FOUND(HttpStatus.NOT_FOUND, "합치기 질문을 찾을 수 없습니다."),
+	NOT_MERGE_MEMBER(HttpStatus.FORBIDDEN, "이 합치기 질문을 받은 사람만 답할 수 있습니다."),
+	ALREADY_ANSWERED(HttpStatus.CONFLICT, "이미 답했습니다. 한 번 한 답은 바꿀 수 없습니다.");
 
 	private final HttpStatus status;
 	private final String message;

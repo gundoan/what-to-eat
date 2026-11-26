@@ -21,7 +21,7 @@ export function ProposingPhase({ room, me, actions }: Props) {
       <ProposalForm me={me} onPropose={actions.propose} onAllGood={actions.allGood} />
 
       <h2>제안된 메뉴</h2>
-      <MenuList menus={room.menus} />
+      <MenuList menus={room.menus} myMenuId={me.menuId} />
 
       {me.host && (
         <button type="button" onClick={actions.nextPhase}>

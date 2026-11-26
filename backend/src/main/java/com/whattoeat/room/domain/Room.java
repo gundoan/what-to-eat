@@ -67,22 +67,48 @@ public class Room {
 	/** 대기 중 → 제안 중. 방장이 정한 제안 시간만큼 타이머를 건다. */
 	public void startProposal(Instant now) {
 		requireStatus(RoomStatus.WAITING);
-		this.status = RoomStatus.PROPOSING;
-		this.phaseStartedAt = now;
-		this.phaseEndsAt = now.plusSeconds(phaseDurations.proposalSeconds());
+		moveTo(RoomStatus.PROPOSING, now, phaseDurations.proposalSeconds());
 	}
 
-	/** 제안 중 → 메뉴가 하나라도 있으면 합치기 중, 아무도 제안하지 않았으면 랜덤 선택. */
-	public void finishProposal(boolean anyMenuProposed, Instant now) {
+	/**
+	 * 제안 중 → 다음 단계. 메뉴 수에 따라 갈 곳이 다르다.
+	 * <ul>
+	 * <li>2개 이상: 합치기 중. 방장이 정한 합치기 시간만큼 타이머를 건다.</li>
+	 * <li>1개: 합칠 상대가 없으므로 바로 투표 중.</li>
+	 * <li>0개: 아무도 제안하지 않았으므로 랜덤 선택.</li>
+	 * </ul>
+	 */
+	public void finishProposal(long menuCount, Instant now) {
 		requireStatus(RoomStatus.PROPOSING);
-		this.status = anyMenuProposed ? RoomStatus.MERGING : RoomStatus.RANDOM_PICK;
-		this.phaseStartedAt = now;
-		// 합치기와 랜덤 선택에도 시간 제한이 있지만, 그 단계의 동작을 만드는 기능 3·5에서 타이머를 건다.
-		this.phaseEndsAt = null;
+		if (menuCount >= 2) {
+			moveTo(RoomStatus.MERGING, now, phaseDurations.mergeSeconds());
+		}
+		else if (menuCount == 1) {
+			// 투표 단계의 타이머와 "메뉴가 1개면 바로 결정"은 기능 4·5에서 만든다.
+			moveTo(RoomStatus.VOTING, now, null);
+		}
+		else {
+			// 랜덤 선택의 타이머는 기능 5에서 건다.
+			moveTo(RoomStatus.RANDOM_PICK, now, null);
+		}
+	}
+
+	/** 합치기 중 → 투표 중. */
+	public void finishMerging(Instant now) {
+		requireStatus(RoomStatus.MERGING);
+		// 투표 단계의 타이머는 기능 4에서 건다.
+		moveTo(RoomStatus.VOTING, now, null);
 	}
 
 	public boolean isPhaseExpired(Instant now) {
 		return phaseEndsAt != null && !now.isBefore(phaseEndsAt);
+	}
+
+	/** @param seconds 이 단계의 시간. null이면 시간 제한이 없다 */
+	private void moveTo(RoomStatus next, Instant now, Integer seconds) {
+		this.status = next;
+		this.phaseStartedAt = now;
+		this.phaseEndsAt = seconds == null ? null : now.plusSeconds(seconds);
 	}
 
 	private void requireStatus(RoomStatus expected) {

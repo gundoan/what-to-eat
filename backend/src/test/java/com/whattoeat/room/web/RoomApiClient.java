@@ -68,6 +68,21 @@ final class RoomApiClient {
 		return mockMvc.perform(get("/api/rooms/" + code).cookie(cookie));
 	}
 
+	ResultActions answerMerge(String code, Cookie cookie, String groupId, boolean agree) throws Exception {
+		return mockMvc.perform(put("/api/rooms/" + code + "/me/merge-answers/" + groupId).cookie(cookie)
+			.contentType(MediaType.APPLICATION_JSON)
+			.content("{\"agree\": " + agree + "}"));
+	}
+
+	ResultActions finishMerge(String code, Cookie cookie) throws Exception {
+		return mockMvc.perform(post("/api/rooms/" + code + "/me/merge-done").cookie(cookie));
+	}
+
+	/** 방을 조회해서 응답 본문(JSON)을 돌려준다. */
+	String roomJson(String code, Cookie cookie) throws Exception {
+		return getRoom(code, cookie).andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+	}
+
 	private static Cookie cookieOf(MvcResult result) {
 		Cookie cookie = result.getResponse().getCookie(ParticipantCookie.NAME);
 		assertThat(cookie).as("참여자 쿠키를 받아야 한다").isNotNull();
