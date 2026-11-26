@@ -39,6 +39,14 @@ export function allGood(code: string): Promise<RoomView> {
   return request(`${roomPath(code)}/me/all-good`, { method: 'POST' })
 }
 
+/** 직접 합치기 요청: 내 메뉴를 targetMenuId 메뉴에 합치자고 요청한다. 받아들여지면 그 메뉴가 대표로 남는다. */
+export function requestMerge(code: string, targetMenuId: string): Promise<RoomView> {
+  return request(`${roomPath(code)}/me/merge-requests`, {
+    method: 'POST',
+    body: JSON.stringify({ targetMenuId }),
+  })
+}
+
 /** 합치기 질문에 답한다(agree가 true면 합치기). 한 번 답하면 바꿀 수 없다. */
 export function answerMerge(code: string, groupId: string, agree: boolean): Promise<RoomView> {
   return request(`${roomPath(code)}/me/merge-answers/${encodeURIComponent(groupId)}`, {
