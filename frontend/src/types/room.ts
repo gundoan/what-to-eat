@@ -1,6 +1,6 @@
 // 서버 API가 주고받는 데이터 모양. 백엔드의 RoomState, RoomView와 같아야 한다.
 
-export type RoomStatus = 'WAITING' | 'PROPOSING' | 'MERGING' | 'VOTING' | 'RANDOM_PICK'
+export type RoomStatus = 'WAITING' | 'PROPOSING' | 'MERGING' | 'VOTING' | 'REVOTING' | 'RANDOM_PICK' | 'FINISHED'
 
 export type PhaseDurations = {
   proposalSeconds: number
@@ -35,6 +35,28 @@ export type MergeGroup = {
   answeredCount: number
 }
 
+/** 표 하나의 점수. +1(먹고 싶다) 또는 -1(먹기 싫다) */
+export type VotePoint = 1 | -1
+
+export type Vote = {
+  menuId: string
+  point: VotePoint
+}
+
+/** 한 메뉴가 받은 점수. 누가 어떻게 찍었는지는 없다. */
+export type MenuScore = {
+  menu: MenuItem
+  plus: number
+  minus: number
+  total: number
+}
+
+/** 내가 낸 투표지. "다 좋음"이면 votes가 비어 있다. */
+export type Ballot = {
+  allGood: boolean
+  votes: Vote[]
+}
+
 /** 방 참여자 모두에게 똑같이 보이는 방 상태. */
 export type RoomState = {
   code: string
@@ -47,10 +69,14 @@ export type RoomState = {
   serverTime: string
   /** 남아 있는 메뉴(다른 메뉴에 합쳐진 것은 빠진다), 가나다순. 누가 냈는지는 없다 */
   menus: MenuItem[]
-  /** 지금 단계(제안, 합치기)를 끝낸 사람 수 */
+  /** 지금 단계(제안, 합치기, 투표)를 끝낸 사람 수 */
   doneCount: number
   /** 합치기 그룹들(합치기 단계부터 생긴다) */
   mergeGroups: MergeGroup[]
+  /** 결정된 메뉴. 끝나기 전에는 null */
+  resultMenu: MenuItem | null
+  /** 메뉴별 점수(총점이 높은 순). 투표가 끝난 뒤에만 온다 */
+  voteScores: MenuScore[]
 }
 
 /** 받는 사람 본인에 대한 정보. 다른 사람이 방장인지, 무엇을 냈는지는 알 수 없다. */
@@ -69,7 +95,9 @@ export type Me = {
   sentGroupId: string | null
   /** 지금 내가 직접 합치기를 요청할 수 있는 메뉴들의 번호 */
   requestableMenuIds: string[]
-  /** 지금 단계(제안, 합치기)에서 할 일을 끝냈는지 */
+  /** 내가 낸 투표지. 아직 내지 않았으면 null */
+  ballot: Ballot | null
+  /** 지금 단계(제안, 합치기, 투표)에서 할 일을 끝냈는지 */
   done: boolean
 }
 

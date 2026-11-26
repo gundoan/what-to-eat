@@ -7,12 +7,14 @@ import {
   nextPhase,
   propose,
   requestMerge,
+  submitVotes,
   subscribeRoom,
+  voteAllGood,
 } from '../api/rooms'
 import { ApiError } from '../api/client'
-import type { Me, RoomState, RoomView } from '../types/room'
+import type { Me, RoomState, RoomView, Vote } from '../types/room'
 
-export type RoomError = 'NOT_FOUND' | 'FULL' | 'UNKNOWN'
+export type RoomError = 'NOT_FOUND' | 'FULL' | 'ENDED' | 'UNKNOWN'
 
 /** 서버가 보낸 방 상태에, 이 브라우저의 시계 기준으로 바꾼 "단계가 끝나는 시각"을 더한 것. */
 export type RoomSnapshot = RoomState & {
@@ -38,6 +40,10 @@ export type RoomActions = {
   answerMerge: (groupId: string, agree: boolean) => void
   /** "합치기 끝냄" */
   finishMerge: () => void
+  /** 표(1~2개)를 낸다 */
+  submitVotes: (votes: Vote[]) => void
+  /** 투표의 "다 좋음" */
+  voteAllGood: () => void
 }
 
 /**
@@ -94,6 +100,8 @@ export function useRoom(code: string) {
     requestMerge: (targetMenuId) => void run(() => requestMerge(code, targetMenuId)),
     answerMerge: (groupId, agree) => void run(() => answerMerge(code, groupId, agree)),
     finishMerge: () => void run(() => finishMerge(code)),
+    submitVotes: (votes) => void run(() => submitVotes(code, votes)),
+    voteAllGood: () => void run(() => voteAllGood(code)),
   }
 
   return { screen, actions, actionError }
@@ -113,6 +121,7 @@ function toSnapshot(state: RoomState): RoomSnapshot {
 function toRoomError(e: unknown): RoomError {
   if (e instanceof ApiError && e.code === 'ROOM_NOT_FOUND') return 'NOT_FOUND'
   if (e instanceof ApiError && e.code === 'ROOM_FULL') return 'FULL'
+  if (e instanceof ApiError && e.code === 'VOTING_ENDED') return 'ENDED'
   return 'UNKNOWN'
 }
 
