@@ -16,7 +16,8 @@ import org.junit.jupiter.api.Test;
 import org.springframework.test.util.ReflectionTestUtils;
 
 /**
- * 랜덤 선택의 뽑기: 카드 뽑기처럼 한 바퀴 안에서는 이미 뽑힌 사람을 다시 뽑지 않고, 모두 뽑히면 처음부터 다시 뽑는다.
+ * 랜덤 선택의 뽑기: 카드 뽑기처럼 한 바퀴 안에서는 이미 뽑힌 사람을 다시 뽑지 않고, 모두 뽑히면 처음부터 다시 뽑는다
+ * (새 바퀴의 첫 사람은 바로 앞 사람과 다르게).
  */
 class PickTurnTest {
 
@@ -54,7 +55,7 @@ class PickTurnTest {
 	}
 
 	@Test
-	@DisplayName("모두 한 번씩 뽑혔는데 아무도 안 정했으면, 다음 바퀴로 넘어가 처음부터 전원 중에서 뽑는다")
+	@DisplayName("모두 한 번씩 뽑힌 뒤 다시 뽑으면 다음 바퀴로 넘어가 처음부터 뽑고, 바로 앞 사람은 빼고 뽑는다")
 	void startsOverAfterEveryoneWasPicked() {
 		List<Participant> people = people(2);
 		List<PickTurn> turns = drawAndExpire(people, 2);
@@ -63,6 +64,35 @@ class PickTurnTest {
 
 		assertThat(next.getCycle()).isEqualTo(2);
 		assertThat(next.getTurnNumber()).isEqualTo(3);
+		assertThat(next.isFor(turns.getLast().getParticipant())).as("두 명이면 새 바퀴의 첫 사람은 항상 다른 사람이다")
+			.isFalse();
+	}
+
+	@Test
+	@DisplayName("새 바퀴의 첫 사람으로 바로 앞 사람은 절대 안 나오고, 나머지는 모두 나올 수 있다 (100번)")
+	void newCycleNeverStartsWithThePreviousPerson() {
+		List<Participant> people = people(3);
+		List<PickTurn> turns = drawAndExpire(people, 3);
+		Participant previous = turns.getLast().getParticipant();
+		Set<Long> firstOfNewCycle = new HashSet<>();
+
+		for (int trial = 0; trial < 100; trial++) {
+			firstOfNewCycle.add(PickTurn.drawNext(room, people, turns, random, NOW).getParticipant().getId());
+		}
+
+		assertThat(firstOfNewCycle).doesNotContain(previous.getId()).hasSize(2);
+	}
+
+	@Test
+	@DisplayName("혼자인 방은 뺄 사람이 없으므로 다음 바퀴에도 그 사람이 뽑힌다")
+	void soloRoomPicksTheSamePersonAgain() {
+		List<Participant> people = people(1);
+		List<PickTurn> turns = drawAndExpire(people, 1);
+
+		PickTurn next = PickTurn.drawNext(room, people, turns, random, NOW);
+
+		assertThat(next.isFor(people.getFirst())).isTrue();
+		assertThat(next.getCycle()).isEqualTo(2);
 	}
 
 	@Test

@@ -26,7 +26,8 @@ import org.hibernate.type.SqlTypes;
  * <ul>
  * <li>뽑힌 사람만 메뉴를 정할 수 있고, 넘기기는 없다. 시간 안에 안 정하거나 방장이 "다른 사람 뽑기"를 누르면 다음 차례로 넘어간다.</li>
  * <li>카드 뽑기처럼 한 바퀴(cycle) 안에서는 이미 뽑힌 사람을 다시 뽑지 않는다.</li>
- * <li>시간 초과로 다시 뽑는 것은 한 바퀴까지만 한다. 모두 뽑힌 뒤에는 방장이 "다른 사람 뽑기"를 눌러야 다음 바퀴를 처음부터 뽑는다.</li>
+ * <li>시간 초과로 다시 뽑는 것은 한 바퀴까지만 한다. 모두 뽑힌 뒤에는 방장이 "다른 사람 뽑기"를 눌러야 다음 바퀴를 처음부터 뽑는다.
+ * 새 바퀴의 첫 사람은 바로 앞 사람과 다르게 뽑는다.</li>
  * <li>방마다 정하는 중(ACTIVE)인 차례는 하나뿐이다. DB도 막는다.</li>
  * </ul>
  */
@@ -82,7 +83,8 @@ public class PickTurn {
 	}
 
 	/**
-	 * 다음 차례를 뽑는다. 지금 바퀴에서 아직 안 뽑힌 사람 중 무작위로 한 명을 고르고, 모두 뽑혔으면 다음 바퀴로 넘어가 전원 중에서 고른다.
+	 * 다음 차례를 뽑는다. 지금 바퀴에서 아직 안 뽑힌 사람 중 무작위로 한 명을 고르고, 모두 뽑혔으면 다음 바퀴로 넘어가 처음부터 고른다.
+	 * 새 바퀴의 첫 사람은 바로 앞에 뽑힌 사람을 빼고 고른다(혼자인 방이 아니면).
 	 * 늦게 들어온 사람은 지금 바퀴에서 아직 안 뽑힌 사람이므로 바로 후보가 된다.
 	 *
 	 * @param participants 방의 참여자 모두(방을 나간 사람도 포함된다. 뽑히면 시간이 다 되어 다음 차례로 넘어간다)
@@ -98,9 +100,9 @@ public class PickTurn {
 		List<Participant> candidates = notPickedIn(cycle, participants, previousTurns);
 		if (candidates.isEmpty()) {
 			// 한 바퀴를 다 돌았는데 아무도 안 정했다(시간 초과로는 한 바퀴까지만 뽑으므로, 방장이 "다른 사람 뽑기"를 누른 것이다).
-			// 카드를 다시 모아 섞듯이 처음부터 뽑는다.
+			// 카드를 다시 모아 섞듯이 처음부터 뽑되, "다른 사람 뽑기"에 같은 사람이 또 나오지 않게 바로 앞 사람은 뺀다.
 			cycle++;
-			candidates = participants;
+			candidates = othersThan(previousTurns.getLast().getParticipant(), participants);
 		}
 		Participant chosen = candidates.get(random.nextInt(candidates.size()));
 		return new PickTurn(room, chosen, previousTurns.size() + 1, cycle, now);
@@ -128,6 +130,14 @@ public class PickTurn {
 			.map(turn -> turn.getParticipant().getId())
 			.collect(Collectors.toSet());
 		return participants.stream().filter(participant -> !picked.contains(participant.getId())).toList();
+	}
+
+	/** other를 뺀 참여자들. 혼자인 방이면 뺄 수 없으므로 그대로 돌려준다. */
+	private static List<Participant> othersThan(Participant other, List<Participant> participants) {
+		List<Participant> others = participants.stream()
+			.filter(participant -> !participant.getId().equals(other.getId()))
+			.toList();
+		return others.isEmpty() ? participants : others;
 	}
 
 	/** 뽑힌 사람이 메뉴를 정했다. */

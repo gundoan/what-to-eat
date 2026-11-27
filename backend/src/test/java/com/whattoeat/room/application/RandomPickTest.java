@@ -94,19 +94,20 @@ class RandomPickTest {
 	}
 
 	@Test
-	@DisplayName("자동 다시 뽑기가 멈춘 뒤 방장이 다른 사람 뽑기를 누르면 다음 바퀴가 시작되고, 시간 제한도 다시 생긴다")
+	@DisplayName("자동 다시 뽑기가 멈춘 뒤 방장이 다른 사람 뽑기를 누르면 다음 바퀴가 시작되고, 시간 제한도 다시 생긴다. 바로 앞 사람은 다시 안 뽑힌다")
 	void hostStartsNextCycleAfterStop() {
 		PickRoom room = randomPickRoom(2);
 		phaseService.advanceExpiredPhases(room(room).getPhaseEndsAt());
 		phaseService.advanceExpiredPhases(room(room).getPhaseEndsAt());
 		assertThat(room(room).getPhaseEndsAt()).isNull();
+		String last = picker(room);
 
 		phaseService.advanceByHost(room.code(), room.host(), RoomStatus.RANDOM_PICK, 2);
 
 		assertThat(state(room).pickTurn()).isEqualTo(3);
 		assertThat(room(room).getPhaseEndsAt()).isNotNull();
 		assertThat(pickTurnRepository.findByRoomOrderByTurnNumber(room(room)).getLast().getCycle()).isEqualTo(2);
-		picker(room); // 새 바퀴에서 누군가 뽑혀 있다
+		assertThat(picker(room)).as("두 명이면 다른 사람 뽑기는 반드시 다른 사람을 뽑는다").isNotEqualTo(last);
 	}
 
 	@Test
