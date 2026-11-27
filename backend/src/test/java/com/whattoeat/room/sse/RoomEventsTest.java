@@ -149,6 +149,29 @@ class RoomEventsTest {
 	}
 
 	@Test
+	@DisplayName("랜덤 선택이 되면 뽑힌 사람의 SSE에만 '내가 뽑혔다'가 온다")
+	void onlyPickerIsToldThroughSse() throws Exception {
+		HttpResponse<String> created = post("/api/rooms", null);
+		String code = codeOf(created.body());
+		String hostCookie = cookieOf(created);
+		String guestCookie = cookieOf(post("/api/rooms/" + code + "/participants", null));
+		send("POST", "/api/rooms/" + code + "/next-phase", hostCookie, "{\"from\": \"WAITING\"}");
+
+		try (SseTestConnection hostEvents = connect(code, hostCookie);
+				SseTestConnection guestEvents = connect(code, guestCookie)) {
+			send("POST", "/api/rooms/" + code + "/me/all-good", hostCookie, "{}");
+			send("POST", "/api/rooms/" + code + "/me/all-good", guestCookie, "{}");
+
+			String toHost = nextEventWithStatus(hostEvents, "RANDOM_PICK");
+			String toGuest = nextEventWithStatus(guestEvents, "RANDOM_PICK");
+			boolean hostPicked = JsonPath.read(toHost, "$.me.picking");
+			boolean guestPicked = JsonPath.read(toGuest, "$.me.picking");
+			assertThat(hostPicked ^ guestPicked).as("둘 중 정확히 한 사람만 뽑혔다는 정보를 받는다").isTrue();
+			assertThat(JsonPath.<Integer>read(toGuest, "$.room.pickTurn")).isEqualTo(1);
+		}
+	}
+
+	@Test
 	@DisplayName("방 참여자가 아니면 SSE에 연결할 수 없다")
 	void rejectsNonParticipant() throws Exception {
 		String code = codeOf(post("/api/rooms", null).body());
@@ -164,6 +187,17 @@ class RoomEventsTest {
 
 	private SseTestConnection connect(String code, String cookie) throws Exception {
 		return SseTestConnection.open(http, uri("/api/rooms/" + code + "/events"), cookie);
+	}
+
+	/** 방 상태가 status인 이벤트가 올 때까지 앞의 이벤트를 건너뛴다. */
+	private static String nextEventWithStatus(SseTestConnection events, String status) throws Exception {
+		for (int i = 0; i < 10; i++) {
+			String data = events.nextEventData(RoomEventBroadcaster.ROOM_EVENT, WAIT);
+			if (status.equals(JsonPath.read(data, "$.room.status"))) {
+				return data;
+			}
+		}
+		throw new AssertionError("상태가 " + status + "인 이벤트를 받지 못했다");
 	}
 
 	private HttpResponse<String> post(String path, String cookie) throws Exception {
