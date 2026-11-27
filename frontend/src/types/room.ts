@@ -75,7 +75,10 @@ export type RoomState = {
   code: string
   status: RoomStatus
   phaseDurations: PhaseDurations
+  /** 참여 인원: 방에 들어온 적 있는 사람 수. 나가도 줄지 않는다(정원과 "N명 중 M명 끝냄"에 쓴다) */
   participantCount: number
+  /** 지금 접속 중인 사람 수: 방 화면을 열어 둔 사람 수. 탭을 여러 개 연 사람도 한 명이다. 보여주기만 한다 */
+  connectedCount: number
   /** 지금 단계가 끝나는 시각(ISO 문자열). 시간 제한이 없는 단계면 null. 랜덤 선택에서 모두 한 번씩 뽑혀 자동 다시 뽑기가 멈췄을 때도 null */
   phaseEndsAt: string | null
   /** 이 상태를 만든 순간의 서버 시각(ISO 문자열) */

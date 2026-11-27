@@ -49,7 +49,7 @@ export function RoomPage() {
       <h1>뭐먹지?</h1>
       <p className="status">{STATUS_LABELS[room.status]}</p>
       <p>
-        참여 인원 <strong>{room.participantCount}명</strong>
+        참여 인원 <strong>{room.participantCount}명</strong> · 지금 접속 중 <strong>{room.connectedCount}명</strong>
       </p>
       {me.host && <p className="badge">내가 방장이에요. 다른 사람에게는 보이지 않아요.</p>}
       {!connected && <p role="status">연결이 끊겨서 다시 연결하는 중이에요...</p>}
