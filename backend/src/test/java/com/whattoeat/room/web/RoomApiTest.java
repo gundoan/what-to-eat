@@ -106,19 +106,27 @@ class RoomApiTest {
 		}
 
 		@Test
-		@DisplayName("DB도 단계 시간 규칙을 지킨다: 0초(제한 없음)는 받고, 규칙에 없는 시간은 막는다")
-		void databaseAllowsNoLimitButRejectsInvalidSeconds() throws Exception {
+		@DisplayName("DB도 단계 시간 규칙을 지킨다: 0초(제한 없음)와 60분까지는 받고, 규칙에 없는 시간은 막는다")
+		void databaseFollowsPhaseDurationRules() throws Exception {
 			CreatedRoom room = createRoom(null);
 
-			jdbcTemplate.update("update room set proposal_seconds = 0 where code = ?", room.code());
+			jdbcTemplate.update("update room set proposal_seconds = 0, merge_seconds = 3600 where code = ?",
+					room.code());
 
 			assertThat(jdbcTemplate.queryForObject("select proposal_seconds from room where code = ?", Integer.class,
 					room.code()))
 				.isZero();
+			assertThat(jdbcTemplate.queryForObject("select merge_seconds from room where code = ?", Integer.class,
+					room.code()))
+				.isEqualTo(3600);
 			assertThatThrownBy(
 					() -> jdbcTemplate.update("update room set vote_seconds = 15 where code = ?", room.code()))
 				.isInstanceOf(DataAccessException.class)
 				.hasMessageContaining("chk_room_vote_seconds");
+			assertThatThrownBy(
+					() -> jdbcTemplate.update("update room set random_pick_seconds = 3630 where code = ?", room.code()))
+				.isInstanceOf(DataAccessException.class)
+				.hasMessageContaining("chk_room_random_pick_seconds");
 		}
 
 		@Test
