@@ -33,7 +33,7 @@ export function ProposalForm({ me, onPropose, onAllGood }: Props) {
           value={menuName}
           onChange={(event) => setMenuName(event.target.value)}
           maxLength={30}
-          placeholder="가게 이름 + 음식 이름 (예: 할매집 제육)"
+          placeholder="음식 이름 (예: 순댓국)"
         />
         <button type="submit">{me.proposal ? '바꾸기' : '제안하기'}</button>
       </form>
