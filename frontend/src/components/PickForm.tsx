@@ -9,10 +9,14 @@ import type { MenuItem } from '../types/room'
  */
 export type PickTimeRule = 'limited' | 'stopped' | 'noLimit'
 
+/**
+ * 뽑힌 사람에게 보이는 안내. 제한 없음이면 남은 시간 자리에 "시간 제한 없음"이 이미 보이므로, 이 줄은 재미있게 쓴다.
+ * 카드 제목("내가 뽑혔어요!")처럼 뽑힌 사람이 속으로 하는 말투다.
+ */
 const TIME_HINT: Record<PickTimeRule, string> = {
   limited: '시간 안에 정하지 않으면 다른 사람이 뽑혀요.',
-  stopped: '모두 한 번씩 뽑혀서 시간 제한이 없어요. 천천히 정해도 돼요.',
-  noLimit: '시간 제한이 없어요. 천천히 정해도 돼요.',
+  stopped: '모두 한 번씩 뽑혀서 이제 시간 제한이 없어요. 진짜 내가 좋아하는 걸로 가자!',
+  noLimit: '진짜 내가 좋아하는 걸로 가자!',
 }
 
 type Props = {
