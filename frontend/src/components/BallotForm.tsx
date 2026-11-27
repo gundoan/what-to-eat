@@ -1,6 +1,5 @@
 import { useBallotDraft } from '../hooks/useBallotDraft'
 import type { MenuItem, Vote } from '../types/room'
-import { describeVotes } from '../utils/vote'
 
 type Props = {
   menus: MenuItem[]
@@ -9,18 +8,12 @@ type Props = {
   onAllGood: () => void
 }
 
-/** 투표지. 메뉴마다 +1 또는 -1을 고르고(모두 합쳐 2표까지) "제출"하거나, "다 좋음"을 누른다. 둘 다 바꿀 수 없다. */
+/**
+ * 투표지. 메뉴마다 +1 또는 -1을 고르고(모두 합쳐 2표까지) "제출"하거나, "다 좋음"을 누른다.
+ * 둘 다 누르면 바로 처리되고 바꿀 수 없다. 확인창은 띄우지 않고, 바꿀 수 없다는 것을 버튼 위에 미리 적어 둔다.
+ */
 export function BallotForm({ menus, myMenuId, onSubmit, onAllGood }: Props) {
   const draft = useBallotDraft()
-
-  function submit() {
-    const message = `${describeVotes(draft.votes, menus)}\n제출하면 바꿀 수 없어요. 제출할까요?`
-    if (window.confirm(message)) onSubmit(draft.votes)
-  }
-
-  function allGood() {
-    if (window.confirm('투표하지 않고 다른 사람들의 표로 정할까요? 누르면 바꿀 수 없어요.')) onAllGood()
-  }
 
   return (
     <section>
@@ -62,10 +55,11 @@ export function BallotForm({ menus, myMenuId, onSubmit, onAllGood }: Props) {
           )
         })}
       </ul>
-      <button type="button" onClick={submit} disabled={draft.votes.length === 0}>
+      <p className="hint">제출하거나 &apos;다 좋음&apos;을 누르면 바꿀 수 없어요.</p>
+      <button type="button" onClick={() => onSubmit(draft.votes)} disabled={draft.votes.length === 0}>
         제출
       </button>
-      <button type="button" onClick={allGood}>
+      <button type="button" onClick={onAllGood}>
         다 좋음
       </button>
     </section>

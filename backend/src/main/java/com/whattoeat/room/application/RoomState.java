@@ -14,6 +14,9 @@ import com.whattoeat.room.domain.RoomStatus;
  * 누가 참여했는지, 누가 방장인지, 누가 어떤 메뉴를 냈는지, 누가 어떻게 답했는지 같은 개인 정보는 절대 넣지 않는다.
  *
  * @param phaseDurations 단계별 시간(초). 0은 "제한 없음"이다
+ * @param participantCount 참여 인원: 방에 들어온 적 있는 사람 수. 나가도 줄지 않는다. 정원과 "모든 참여자가 끝냄"은 이 숫자로 본다
+ * @param connectedCount 지금 접속 중인 사람 수: 방 화면을 열어 둔(SSE로 연결된) 참여자 수. 탭을 여러 개 연 사람도 한 명이다.
+ * 보여주기만 하고, 단계를 넘기는 규칙에는 쓰지 않는다. 누가 접속 중인지는 없다
  * @param phaseEndsAt 지금 단계가 끝나는 시각. 시간 제한이 없는 단계(대기 중, 끝남, 방장이 "제한 없음"으로 정한 단계)에서는
  * null. 랜덤 선택에서 모두 한 번씩 뽑혀 자동 다시 뽑기를 멈췄을 때도 null이다. 둘은 phaseDurations로 구분한다
  * @param serverTime 이 상태를 만든 순간의 서버 시각. 화면이 휴대폰 시계와 서버 시계의 차이를 보정해 남은 시간을 계산한다
@@ -28,7 +31,7 @@ import com.whattoeat.room.domain.RoomStatus;
  * @param result 결정된 메뉴와 결정 이유. 끝나기 전에는 null
  */
 public record RoomState(String code, RoomStatus status, PhaseDurations phaseDurations, long participantCount,
-		Instant phaseEndsAt, Instant serverTime, List<MenuItem> menus, long doneCount,
+		long connectedCount, Instant phaseEndsAt, Instant serverTime, List<MenuItem> menus, long doneCount,
 		List<MergeGroupItem> mergeGroups, List<MenuItem> voteCandidates, List<MenuScoreItem> voteScores,
 		List<MenuScoreItem> revoteScores, Integer pickTurn, ResultItem result) {
 

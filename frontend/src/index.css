@@ -48,6 +48,17 @@ input {
   font-size: 1rem;
 }
 
+/* "직접 설정"의 분 입력칸: 숫자 두 자리가 들어갈 만큼만 */
+.minutes {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.minutes input {
+  width: 5em;
+}
+
 .countdown {
   font-size: 1.5rem;
 }

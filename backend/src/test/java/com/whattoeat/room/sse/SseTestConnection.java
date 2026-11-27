@@ -7,6 +7,7 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
+import java.util.Optional;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
@@ -23,6 +24,9 @@ final class SseTestConnection implements AutoCloseable {
 	private final BlockingQueue<String> queue = new LinkedBlockingQueue<>();
 
 	private final Thread reader;
+
+	/** 지금 읽고 있는 이벤트의 이름. 이벤트 중간에서 기다리기를 멈춰도 다음에 이어 읽을 수 있게 남겨 둔다 */
+	private String currentEvent;
 
 	private SseTestConnection(Stream<String> lines) {
 		this.lines = lines;
@@ -50,19 +54,24 @@ final class SseTestConnection implements AutoCloseable {
 
 	/** 원하는 이름의 이벤트가 올 때까지 기다렸다가 data 부분을 돌려준다. */
 	String nextEventData(String eventName, Duration timeout) throws InterruptedException {
+		return pollEventData(eventName, timeout).orElseThrow(
+				() -> new AssertionError("'" + eventName + "' 이벤트를 " + timeout.toSeconds() + "초 안에 받지 못했다"));
+	}
+
+	/** nextEventData와 같지만, 시간 안에 오지 않으면 실패하지 않고 빈 값을 돌려준다. 읽던 이벤트는 다음 호출에서 이어 읽는다. */
+	Optional<String> pollEventData(String eventName, Duration timeout) throws InterruptedException {
 		long deadline = System.nanoTime() + timeout.toNanos();
-		String currentEvent = null;
 		while (true) {
 			long remaining = deadline - System.nanoTime();
 			String line = queue.poll(Math.max(remaining, 0), TimeUnit.NANOSECONDS);
 			if (line == null) {
-				throw new AssertionError("'" + eventName + "' 이벤트를 " + timeout.toSeconds() + "초 안에 받지 못했다");
+				return Optional.empty();
 			}
 			if (line.startsWith("event:")) {
 				currentEvent = line.substring("event:".length()).trim();
 			}
 			else if (line.startsWith("data:") && eventName.equals(currentEvent)) {
-				return line.substring("data:".length());
+				return Optional.of(line.substring("data:".length()));
 			}
 			else if (line.isEmpty()) {
 				currentEvent = null;

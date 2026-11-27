@@ -3,9 +3,11 @@ package com.whattoeat.room.application;
 import java.time.Clock;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 import com.whattoeat.room.application.RoomState.MenuItem;
 import com.whattoeat.room.application.RoomState.MenuScoreItem;
@@ -48,29 +50,43 @@ class RoomStateAssembler {
 
 	private final PickTurnRepository pickTurnRepository;
 
+	private final RoomPresence presence;
+
 	private final Clock clock;
 
 	RoomStateAssembler(ParticipantRepository participantRepository, MenuRepository menuRepository,
 			MergeGroupRepository mergeGroupRepository, BallotRepository ballotRepository,
-			PickTurnRepository pickTurnRepository, Clock clock) {
+			PickTurnRepository pickTurnRepository, RoomPresence presence, Clock clock) {
 		this.participantRepository = participantRepository;
 		this.menuRepository = menuRepository;
 		this.mergeGroupRepository = mergeGroupRepository;
 		this.ballotRepository = ballotRepository;
 		this.pickTurnRepository = pickTurnRepository;
+		this.presence = presence;
 		this.clock = clock;
 	}
 
-	/** 한 참여자가 받을 화면 정보. 요청에 대한 응답으로 쓴다. */
+	/**
+	 * 한 참여자가 받을 화면 정보. 요청에 대한 응답으로 쓴다.
+	 * 요청을 보낸 사람은 지금 화면을 쓰고 있으니, SSE 연결이 아직 없어도 "지금 접속 중"으로 센다.
+	 * 처음 들어오는 사람은 참여 응답을 받은 뒤에 SSE로 연결해서, 이렇게 하지 않으면 자기를 뺀 인원이 잠깐 보인다.
+	 */
 	RoomView view(Room room, Participant me) {
-		return views(room).viewOf(me.getId()).orElseThrow();
+		return views(room, Set.of(me.getId())).viewOf(me.getId()).orElseThrow();
+	}
+
+	/** 방 상태와 참여자 모두의 "나" 정보. SSE로 모두에게 보낼 때 쓴다. */
+	RoomViews views(Room room) {
+		return views(room, Set.of());
 	}
 
 	/**
 	 * 방 상태와 참여자 모두의 "나" 정보를 한 번에 만든다.
 	 * 참여자가 몇 명이든 참여자, 메뉴, 합치기 그룹, 투표지, 뽑기 차례를 한 번씩만 읽는다.
+	 *
+	 * @param alsoConnected SSE 연결이 없어도 "지금 접속 중"으로 셀 참여자
 	 */
-	RoomViews views(Room room) {
+	private RoomViews views(Room room, Set<Long> alsoConnected) {
 		List<Participant> participants = participantRepository.findByRoom(room);
 		List<Menu> menus = menuRepository.findSortedByRoom(room);
 		List<MergeGroup> groups = mergeGroupRepository.findWithMenusByRoom(room);
@@ -90,7 +106,7 @@ class RoomStateAssembler {
 					ballotByParticipantId.get(participant.getId())))
 			.count();
 		RoomState state = new RoomState(room.getCode(), status, room.getPhaseDurations(), participants.size(),
-				room.getPhaseEndsAt(), clock.instant(), items(remaining), doneCount, groupItems(groups, menus),
+				connectedCount(room, alsoConnected), room.getPhaseEndsAt(), clock.instant(), items(remaining), doneCount, groupItems(groups, menus),
 				voteCandidates(status, remaining, revoteCandidates), firstRoundScores(status, remaining, firstRound),
 				revoteScores(room, revoteCandidates, revote), activeTurn.map(PickTurn::getTurnNumber).orElse(null),
 				result(room));
@@ -103,6 +119,13 @@ class RoomStateAssembler {
 					menuByParticipantId.get(participant.getId()), ballotByParticipantId.get(participant.getId())));
 		}
 		return new RoomViews(state, meByParticipantId);
+	}
+
+	/** 지금 접속 중인 사람 수: SSE로 연결된 참여자와 alsoConnected를 합쳐, 같은 사람은 한 번만 센다. */
+	private long connectedCount(Room room, Set<Long> alsoConnected) {
+		Set<Long> connected = new HashSet<>(presence.connectedParticipantIds(room.getCode()));
+		connected.addAll(alsoConnected);
+		return connected.size();
 	}
 
 	private static List<Ballot> ballotsOf(List<Ballot> ballots, int round) {

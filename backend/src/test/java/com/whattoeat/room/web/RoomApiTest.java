@@ -66,12 +66,12 @@ class RoomApiTest {
 		@DisplayName("방장이 정한 단계별 시간을 저장한다")
 		void savesChosenDurations() throws Exception {
 			CreatedRoom room = createRoom("""
-					{"proposalSeconds": 30, "mergeSeconds": 600, "voteSeconds": 90, "randomPickSeconds": 120}
+					{"proposalSeconds": 30, "mergeSeconds": 3600, "voteSeconds": 90, "randomPickSeconds": 120}
 					""");
 
 			mockMvc.perform(get("/api/rooms/" + room.code()).cookie(room.cookie()))
 				.andExpect(jsonPath("$.room.phaseDurations.proposalSeconds").value(30))
-				.andExpect(jsonPath("$.room.phaseDurations.mergeSeconds").value(600))
+				.andExpect(jsonPath("$.room.phaseDurations.mergeSeconds").value(3600))
 				.andExpect(jsonPath("$.room.phaseDurations.voteSeconds").value(90))
 				.andExpect(jsonPath("$.room.phaseDurations.randomPickSeconds").value(120));
 		}
@@ -96,8 +96,8 @@ class RoomApiTest {
 		}
 
 		@ParameterizedTest(name = "{0}초는 거절한다")
-		@ValueSource(ints = { 29, 601, 45 })
-		@DisplayName("단계 시간이 규칙(30초~10분, 30초 단위)을 벗어나면 400으로 거절한다")
+		@ValueSource(ints = { 29, 3601, 45 })
+		@DisplayName("단계 시간이 규칙(30초~60분, 30초 단위)을 벗어나면 400으로 거절한다")
 		void rejectsInvalidDuration(int seconds) throws Exception {
 			mockMvc.perform(post("/api/rooms").contentType(MediaType.APPLICATION_JSON)
 				.content("{\"voteSeconds\": " + seconds + "}"))
@@ -106,19 +106,27 @@ class RoomApiTest {
 		}
 
 		@Test
-		@DisplayName("DB도 단계 시간 규칙을 지킨다: 0초(제한 없음)는 받고, 규칙에 없는 시간은 막는다")
-		void databaseAllowsNoLimitButRejectsInvalidSeconds() throws Exception {
+		@DisplayName("DB도 단계 시간 규칙을 지킨다: 0초(제한 없음)와 60분까지는 받고, 규칙에 없는 시간은 막는다")
+		void databaseFollowsPhaseDurationRules() throws Exception {
 			CreatedRoom room = createRoom(null);
 
-			jdbcTemplate.update("update room set proposal_seconds = 0 where code = ?", room.code());
+			jdbcTemplate.update("update room set proposal_seconds = 0, merge_seconds = 3600 where code = ?",
+					room.code());
 
 			assertThat(jdbcTemplate.queryForObject("select proposal_seconds from room where code = ?", Integer.class,
 					room.code()))
 				.isZero();
+			assertThat(jdbcTemplate.queryForObject("select merge_seconds from room where code = ?", Integer.class,
+					room.code()))
+				.isEqualTo(3600);
 			assertThatThrownBy(
 					() -> jdbcTemplate.update("update room set vote_seconds = 15 where code = ?", room.code()))
 				.isInstanceOf(DataAccessException.class)
 				.hasMessageContaining("chk_room_vote_seconds");
+			assertThatThrownBy(
+					() -> jdbcTemplate.update("update room set random_pick_seconds = 3630 where code = ?", room.code()))
+				.isInstanceOf(DataAccessException.class)
+				.hasMessageContaining("chk_room_random_pick_seconds");
 		}
 
 		@Test
@@ -307,13 +315,14 @@ class RoomApiTest {
 				.getContentAsString();
 
 			// 응답에 정해진 항목 말고는 아무것도 없어야 한다. 항목이 하나라도 늘면 이 테스트가 알려준다.
+			// connectedCount(지금 접속 중)는 숫자뿐이고 누가 접속 중인지는 없어서 넣어도 된다.
 			Map<String, Object> response = JsonPath.read(body, "$");
 			Map<String, Object> roomState = JsonPath.read(body, "$.room");
 			Map<String, Object> me = JsonPath.read(body, "$.me");
 			assertThat(response).containsOnlyKeys("room", "me");
-			assertThat(roomState).containsOnlyKeys("code", "status", "phaseDurations", "participantCount", "phaseEndsAt",
-					"serverTime", "menus", "doneCount", "mergeGroups", "voteCandidates", "voteScores", "revoteScores",
-					"pickTurn", "result");
+			assertThat(roomState).containsOnlyKeys("code", "status", "phaseDurations", "participantCount",
+					"connectedCount", "phaseEndsAt", "serverTime", "menus", "doneCount", "mergeGroups", "voteCandidates",
+					"voteScores", "revoteScores", "pickTurn", "result");
 			assertThat(me).containsOnlyKeys("host", "proposal", "allGood", "menuId", "mergedInto", "pendingGroupId",
 					"sentGroupId", "requestableMenuIds", "ballot", "picking", "done");
 		}

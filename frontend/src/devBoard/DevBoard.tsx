@@ -50,7 +50,7 @@ export function DevBoard() {
           </p>
         )}
         <p className="hint">
-          칸마다 다른 참여자예요. 확인 창이 뜨면 답할 때까지 모든 칸이 멈춰요.
+          칸마다 다른 참여자예요.
           {board.outsideUrl !== null && (
             <>
               {' '}

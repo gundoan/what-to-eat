@@ -41,7 +41,6 @@ export function MergingPhase({ room, me, actions }: Props) {
       <MergeMenuList
         menus={room.menus}
         myMenuId={me.menuId}
-        myMenuName={me.proposal}
         requestableIds={me.requestableMenuIds}
         onRequest={actions.requestMerge}
       />
@@ -64,5 +63,5 @@ function requestHint(me: Me): string | null {
   if (me.requestableMenuIds.length === 0) {
     return '지금은 합치기를 요청할 수 있는 메뉴가 없어요.'
   }
-  return '자동으로 안 묶인 같은 메뉴가 있으면 "이 메뉴에 합치기"로 요청해 보세요. 받아들여지면 그 메뉴가 대표로 남아요.'
+  return '자동으로 안 묶인 같은 메뉴가 있으면 "이 메뉴에 합치기"로 요청해 보세요. 받아들여지면 그 메뉴가 대표로 남아요. 보낸 요청은 취소할 수 없어요.'
 }

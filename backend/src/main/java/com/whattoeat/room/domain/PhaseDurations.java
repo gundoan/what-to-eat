@@ -7,7 +7,8 @@ import jakarta.persistence.Embeddable;
 
 /**
  * 방장이 방을 만들 때 정하는 단계별 시간(초). 재투표는 투표 시간을 같이 쓴다.
- * 30초~10분(30초 단위)이거나, 0이면 "제한 없음"이다.
+ * 30초~60분(30초 단위)이거나, 0이면 "제한 없음"이다.
+ * 화면은 이 안에서 몇 가지(30초, 1분, ... 30분)를 목록으로 보여주고, 나머지는 "직접 설정"으로 분 단위로 받는다.
  * 생성자에서 규칙을 검사하므로 규칙을 어긴 값으로는 객체를 만들 수 없다.
  */
 @Embeddable
@@ -18,7 +19,7 @@ public record PhaseDurations(
 		@Column(name = "random_pick_seconds", nullable = false) int randomPickSeconds) {
 
 	public static final int MIN_SECONDS = 30;
-	public static final int MAX_SECONDS = 600;
+	public static final int MAX_SECONDS = 3600;
 	public static final int STEP_SECONDS = 30;
 
 	/**

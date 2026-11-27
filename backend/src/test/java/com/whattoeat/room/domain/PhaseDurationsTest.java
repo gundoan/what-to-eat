@@ -24,8 +24,8 @@ class PhaseDurationsTest {
 	}
 
 	@ParameterizedTest(name = "{0}초는 허용한다")
-	@ValueSource(ints = { 30, 60, 90, 300, 600 })
-	@DisplayName("30초부터 10분까지 30초 단위는 허용한다")
+	@ValueSource(ints = { 30, 60, 90, 300, 600, 1800, 3600 })
+	@DisplayName("30초부터 60분까지 30초 단위는 허용한다")
 	void acceptsValidSeconds(int seconds) {
 		PhaseDurations durations = PhaseDurations.of(seconds, seconds, seconds, seconds);
 
@@ -45,8 +45,8 @@ class PhaseDurationsTest {
 	}
 
 	@ParameterizedTest(name = "{0}초는 거절한다")
-	@ValueSource(ints = { 15, 29, 45, 601, 630, -30 })
-	@DisplayName("0초(제한 없음)가 아니면서 30초보다 짧거나, 10분보다 길거나, 30초 단위가 아니면 거절한다")
+	@ValueSource(ints = { 15, 29, 45, 3601, 3630, -30 })
+	@DisplayName("0초(제한 없음)가 아니면서 30초보다 짧거나, 60분보다 길거나, 30초 단위가 아니면 거절한다")
 	void rejectsInvalidSeconds(int seconds) {
 		assertThatThrownBy(() -> PhaseDurations.of(seconds, null, null, null))
 			.isInstanceOf(BusinessException.class)
