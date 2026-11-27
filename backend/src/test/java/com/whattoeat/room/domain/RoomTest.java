@@ -147,7 +147,7 @@ class RoomTest {
 					ballot(room, participant(room, 2), menus.get(1), 1))), START);
 
 			assertThat(room.getStatus()).isEqualTo(RoomStatus.REVOTING);
-			assertThat(room.getPhaseEndsAt()).isEqualTo(START.plusSeconds(PhaseDurations.DEFAULT_SECONDS));
+			assertThat(room.getPhaseEndsAt()).isEqualTo(START.plusSeconds(PhaseDurations.DEFAULT_VOTE_SECONDS));
 			assertThat(room.voteRound()).isEqualTo(Ballot.REVOTE_ROUND);
 			assertThat(room.getResultMenu()).isNull();
 		}
@@ -162,7 +162,7 @@ class RoomTest {
 					List.of(Ballot.allGood(room, participant(room, 1), Ballot.FIRST_ROUND, START))), START);
 
 			assertThat(room.getStatus()).isEqualTo(RoomStatus.RANDOM_PICK);
-			assertThat(room.getPhaseEndsAt()).isEqualTo(START.plusSeconds(PhaseDurations.DEFAULT_SECONDS));
+			assertThat(room.getPhaseEndsAt()).isEqualTo(START.plusSeconds(PhaseDurations.DEFAULT_RANDOM_PICK_SECONDS));
 		}
 
 	}

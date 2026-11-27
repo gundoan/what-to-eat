@@ -13,13 +13,13 @@ import org.junit.jupiter.params.provider.ValueSource;
 class PhaseDurationsTest {
 
 	@Test
-	@DisplayName("시간을 정하지 않은 단계는 1분이다")
-	void defaultsToOneMinute() {
+	@DisplayName("시간을 정하지 않은 단계는 기본값이다: 제안, 합치기, 투표 5분, 랜덤 선택 1분")
+	void usesDefaultsForMissingPhases() {
 		PhaseDurations durations = PhaseDurations.of(null, 90, null, null);
 
-		assertThat(durations.proposalSeconds()).isEqualTo(60);
-		assertThat(durations.mergeSeconds()).isEqualTo(90);
-		assertThat(durations.voteSeconds()).isEqualTo(60);
+		assertThat(durations.proposalSeconds()).isEqualTo(300);
+		assertThat(durations.mergeSeconds()).as("정한 단계는 정한 대로").isEqualTo(90);
+		assertThat(durations.voteSeconds()).isEqualTo(300);
 		assertThat(durations.randomPickSeconds()).isEqualTo(60);
 	}
 

@@ -68,7 +68,7 @@ class RandomPickTest {
 
 		assertThat(picker(room)).as("한 바퀴 안에서는 이미 뽑힌 사람을 다시 뽑지 않는다").isNotEqualTo(first);
 		assertThat(state(room).pickTurn()).isEqualTo(2);
-		assertThat(room(room).getPhaseEndsAt()).isEqualTo(deadline.plusSeconds(PhaseDurations.DEFAULT_SECONDS));
+		assertThat(room(room).getPhaseEndsAt()).isEqualTo(deadline.plusSeconds(PhaseDurations.DEFAULT_RANDOM_PICK_SECONDS));
 	}
 
 	@Test

@@ -44,16 +44,16 @@ class RoomApiTest {
 	class CreateRoom {
 
 		@Test
-		@DisplayName("시간을 보내지 않으면 모든 단계가 1분이고, 만든 사람이 방장이다")
+		@DisplayName("시간을 보내지 않으면 제안, 합치기, 투표는 5분, 랜덤 선택은 1분이고, 만든 사람이 방장이다")
 		void createsRoomWithDefaultsAndCreatorIsHost() throws Exception {
 			CreatedRoom room = createRoom(null);
 
 			mockMvc.perform(get("/api/rooms/" + room.code()).cookie(room.cookie()))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.room.status").value("WAITING"))
-				.andExpect(jsonPath("$.room.phaseDurations.proposalSeconds").value(60))
-				.andExpect(jsonPath("$.room.phaseDurations.mergeSeconds").value(60))
-				.andExpect(jsonPath("$.room.phaseDurations.voteSeconds").value(60))
+				.andExpect(jsonPath("$.room.phaseDurations.proposalSeconds").value(300))
+				.andExpect(jsonPath("$.room.phaseDurations.mergeSeconds").value(300))
+				.andExpect(jsonPath("$.room.phaseDurations.voteSeconds").value(300))
 				.andExpect(jsonPath("$.room.phaseDurations.randomPickSeconds").value(60))
 				.andExpect(jsonPath("$.room.participantCount").value(1))
 				.andExpect(jsonPath("$.me.host").value(true));
