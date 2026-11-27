@@ -86,12 +86,14 @@ button[aria-pressed='true'] {
   outline: 2px solid currentColor;
 }
 
-.ballot {
+.ballot,
+.pick-list {
   padding: 0;
   list-style: none;
 }
 
-.ballot li {
+.ballot li,
+.pick-list li {
   display: flex;
   justify-content: space-between;
   align-items: center;

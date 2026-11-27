@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import {
   allGood,
   answerMerge,
+  decidePick,
   finishMerge,
   joinRoom,
   nextPhase,
@@ -30,7 +31,7 @@ type RoomScreen =
   | { phase: 'ready'; room: RoomSnapshot; me: Me; connected: boolean }
 
 export type RoomActions = {
-  /** 방장의 "시작"(대기 중) 또는 "다음 단계로" */
+  /** 방장의 "시작"(대기 중), "다음 단계로", "다른 사람 뽑기"(랜덤 선택) */
   nextPhase: () => void
   propose: (menuName: string) => void
   allGood: () => void
@@ -44,6 +45,8 @@ export type RoomActions = {
   submitVotes: (votes: Vote[]) => void
   /** 투표의 "다 좋음" */
   voteAllGood: () => void
+  /** 랜덤 선택에서 뽑힌 사람이 메뉴를 정한다 */
+  decidePick: (menuName: string) => void
 }
 
 /**
@@ -93,7 +96,7 @@ export function useRoom(code: string) {
 
   const actions: RoomActions = {
     nextPhase: () => {
-      if (screen.phase === 'ready') void run(() => nextPhase(code, screen.room.status))
+      if (screen.phase === 'ready') void run(() => nextPhase(code, screen.room.status, screen.room.pickTurn))
     },
     propose: (menuName) => void run(() => propose(code, menuName)),
     allGood: () => void run(() => allGood(code)),
@@ -102,6 +105,7 @@ export function useRoom(code: string) {
     finishMerge: () => void run(() => finishMerge(code)),
     submitVotes: (votes) => void run(() => submitVotes(code, votes)),
     voteAllGood: () => void run(() => voteAllGood(code)),
+    decidePick: (menuName) => void run(() => decidePick(code, menuName)),
   }
 
   return { screen, actions, actionError }

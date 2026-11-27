@@ -64,7 +64,7 @@ export function RoomPage() {
         // key를 단계로 줘서, 재투표가 시작되면 고르던 표를 버리고 새 투표지로 시작한다.
         <VotingPhase key={room.status} room={room} me={me} actions={actions} />
       )}
-      {room.status === 'RANDOM_PICK' && <RandomPickPhase />}
+      {room.status === 'RANDOM_PICK' && <RandomPickPhase room={room} me={me} actions={actions} />}
       {room.status === 'FINISHED' && <FinishedPhase room={room} me={me} />}
 
       {/* 메뉴가 결정된 방에는 새로 들어올 수 없으니 링크를 나눌 필요가 없다. */}
