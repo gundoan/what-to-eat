@@ -1,6 +1,7 @@
 package com.whattoeat.room.web;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
@@ -22,6 +23,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.dao.DataAccessException;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -81,6 +83,22 @@ class RoomApiTest {
 				.content("{\"voteSeconds\": " + seconds + "}"))
 				.andExpect(status().isBadRequest())
 				.andExpect(jsonPath("$.code").value("INVALID_PHASE_DURATION"));
+		}
+
+		@Test
+		@DisplayName("DB도 단계 시간 규칙을 지킨다: 0초(제한 없음)는 받고, 규칙에 없는 시간은 막는다")
+		void databaseAllowsNoLimitButRejectsInvalidSeconds() throws Exception {
+			CreatedRoom room = createRoom(null);
+
+			jdbcTemplate.update("update room set proposal_seconds = 0 where code = ?", room.code());
+
+			assertThat(jdbcTemplate.queryForObject("select proposal_seconds from room where code = ?", Integer.class,
+					room.code()))
+				.isZero();
+			assertThatThrownBy(
+					() -> jdbcTemplate.update("update room set vote_seconds = 15 where code = ?", room.code()))
+				.isInstanceOf(DataAccessException.class)
+				.hasMessageContaining("chk_room_vote_seconds");
 		}
 
 		@Test
