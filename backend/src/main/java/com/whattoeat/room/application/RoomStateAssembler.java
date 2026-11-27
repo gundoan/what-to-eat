@@ -9,6 +9,7 @@ import java.util.Map;
 import com.whattoeat.room.application.RoomState.MenuItem;
 import com.whattoeat.room.application.RoomState.MenuScoreItem;
 import com.whattoeat.room.application.RoomState.MergeGroupItem;
+import com.whattoeat.room.application.RoomState.ResultItem;
 import com.whattoeat.room.application.RoomView.BallotItem;
 import com.whattoeat.room.application.RoomView.Me;
 import com.whattoeat.room.application.RoomView.VoteItem;
@@ -65,21 +66,24 @@ class RoomStateAssembler {
 		List<Participant> participants = participantRepository.findByRoom(room);
 		List<Menu> menus = menuRepository.findSortedByRoom(room);
 		List<MergeGroup> groups = mergeGroupRepository.findWithMenusByRoom(room);
-		List<Ballot> ballots = ballotRepository.findWithVotesByRoomAndVoteRound(room, Ballot.FIRST_ROUND);
+		List<Ballot> allBallots = ballotRepository.findWithVotesByRoom(room);
+		List<Ballot> firstRound = ballotsOf(allBallots, Ballot.FIRST_ROUND);
+		List<Ballot> revote = ballotsOf(allBallots, Ballot.REVOTE_ROUND);
+		List<Ballot> currentRound = room.voteRound() == Ballot.FIRST_ROUND ? firstRound : revote;
 		Map<Long, Menu> menuByParticipantId = Menu.byParticipantId(menus);
-		Map<Long, Ballot> ballotByParticipantId = Ballot.byParticipantId(ballots);
+		Map<Long, Ballot> ballotByParticipantId = Ballot.byParticipantId(currentRound);
 		List<Menu> remaining = Menu.remaining(menus);
+		List<Menu> revoteCandidates = VoteTally.candidates(Ballot.REVOTE_ROUND, remaining, firstRound);
 		RoomStatus status = room.getStatus();
 
 		long doneCount = participants.stream()
 			.filter(participant -> participant.hasFinished(status, menuByParticipantId.get(participant.getId()),
 					ballotByParticipantId.get(participant.getId())))
 			.count();
-		Menu resultMenu = room.getResultMenu();
 		RoomState state = new RoomState(room.getCode(), status, room.getPhaseDurations(), participants.size(),
-				room.getPhaseEndsAt(), clock.instant(), remaining.stream().map(RoomStateAssembler::item).toList(),
-				doneCount, groupItems(groups, menus), resultMenu == null ? null : item(resultMenu),
-				voteScores(status, remaining, ballots));
+				room.getPhaseEndsAt(), clock.instant(), items(remaining), doneCount, groupItems(groups, menus),
+				voteCandidates(status, remaining, revoteCandidates), firstRoundScores(status, remaining, firstRound),
+				revoteScores(room, revoteCandidates, revote), result(room));
 
 		MeFactory meFactory = new MeFactory(status, groups, remaining, MergeRequestRules.of(participants, groups));
 		Map<Long, Me> meByParticipantId = new HashMap<>();
@@ -90,16 +94,41 @@ class RoomStateAssembler {
 		return new RoomViews(state, meByParticipantId);
 	}
 
+	private static List<Ballot> ballotsOf(List<Ballot> ballots, int round) {
+		return ballots.stream().filter(ballot -> ballot.getVoteRound() == round).toList();
+	}
+
+	/** 지금 표를 줄 수 있는 메뉴. 투표면 남은 메뉴 전부, 재투표면 동점이었던 메뉴만이다. */
+	private static List<MenuItem> voteCandidates(RoomStatus status, List<Menu> remaining,
+			List<Menu> revoteCandidates) {
+		return switch (status) {
+			case VOTING -> items(remaining);
+			case REVOTING -> items(revoteCandidates);
+			default -> List.of();
+		};
+	}
+
 	/**
-	 * 메뉴별 점수. 투표가 끝난 뒤(재투표로 가거나 결정됐을 때)에만 보여준다.
+	 * 첫 투표의 점수. 투표가 끝난 뒤(재투표로 가거나 결정됐을 때)에만 보여준다.
 	 * 투표 중에 보여주면 누가 표를 낸 순간 바뀐 점수로 그 사람의 표를 짐작할 수 있고, 앞선 메뉴로 표가 쏠릴 수 있다.
 	 * 투표 없이 결정된 경우(메뉴가 하나뿐)에는 보여줄 점수가 없다.
 	 */
-	private static List<MenuScoreItem> voteScores(RoomStatus status, List<Menu> remaining, List<Ballot> ballots) {
+	private static List<MenuScoreItem> firstRoundScores(RoomStatus status, List<Menu> remaining,
+			List<Ballot> ballots) {
 		if (status != RoomStatus.REVOTING && status != RoomStatus.FINISHED) {
 			return List.of();
 		}
-		VoteTally tally = VoteTally.count(remaining, ballots);
+		return scores(VoteTally.count(remaining, ballots));
+	}
+
+	/** 재투표의 점수. 재투표가 끝나 결정된 뒤에만 보여준다. */
+	private static List<MenuScoreItem> revoteScores(Room room, List<Menu> revoteCandidates, List<Ballot> ballots) {
+		boolean revoteFinished = room.getStatus() == RoomStatus.FINISHED
+				&& room.voteRound() == Ballot.REVOTE_ROUND;
+		return revoteFinished ? scores(VoteTally.count(revoteCandidates, ballots)) : List.of();
+	}
+
+	private static List<MenuScoreItem> scores(VoteTally tally) {
 		if (tally.hasNoVotes()) {
 			return List.of();
 		}
@@ -107,6 +136,15 @@ class RoomStateAssembler {
 			.stream()
 			.map(score -> new MenuScoreItem(item(score.menu()), score.plus(), score.minus(), score.total()))
 			.toList();
+	}
+
+	private static ResultItem result(Room room) {
+		return room.getStatus() == RoomStatus.FINISHED ? new ResultItem(room.getResultName(), room.getResultReason())
+				: null;
+	}
+
+	private static List<MenuItem> items(List<Menu> menus) {
+		return menus.stream().map(RoomStateAssembler::item).toList();
 	}
 
 	/**

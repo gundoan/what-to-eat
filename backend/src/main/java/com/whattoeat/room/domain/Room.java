@@ -2,6 +2,7 @@ package com.whattoeat.room.domain;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.random.RandomGenerator;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Embedded;
@@ -55,6 +56,16 @@ public class Room {
 	@JoinColumn(name = "result_menu_id")
 	private Menu resultMenu;
 
+	/** 결정된 이름. 끝나기 전에는 비어 있다. */
+	@Column(length = MenuName.MAX_LENGTH)
+	private String resultName;
+
+	/** 어떻게 결정됐는지. 끝나기 전에는 비어 있다. */
+	@Enumerated(EnumType.STRING)
+	@JdbcTypeCode(SqlTypes.VARCHAR)
+	@Column(length = 20)
+	private ResultReason resultReason;
+
 	protected Room() {
 	}
 
@@ -95,7 +106,7 @@ public class Room {
 			moveTo(RoomStatus.MERGING, now, phaseDurations.mergeSeconds());
 		}
 		else if (menus.size() == 1) {
-			decide(menus.getFirst(), now);
+			decide(menus.getFirst(), ResultReason.ONLY_MENU, now);
 		}
 		else {
 			// 랜덤 선택의 타이머는 기능 5에서 건다.
@@ -118,13 +129,13 @@ public class Room {
 			moveTo(RoomStatus.VOTING, now, phaseDurations.voteSeconds());
 		}
 		else {
-			decide(remainingMenus.getFirst(), now);
+			decide(remainingMenus.getFirst(), ResultReason.ONLY_MENU, now);
 		}
 	}
 
 	/**
 	 * 투표 중 → 다음 단계. 1등이 하나면 그 메뉴로 결정한다.
-	 * 동점이면 재투표, 아무도 표를 내지 않았으면 랜덤 선택으로 간다(둘 다 실제 동작은 기능 5에서 만든다).
+	 * 동점이면 동점 메뉴만 놓고 재투표(투표와 같은 시간), 아무도 표를 내지 않았으면 랜덤 선택으로 간다.
 	 */
 	public void finishVoting(VoteTally tally, Instant now) {
 		requireStatus(RoomStatus.VOTING);
@@ -134,16 +145,48 @@ public class Room {
 		}
 		List<Menu> leaders = tally.leaders();
 		if (leaders.size() == 1) {
-			decide(leaders.getFirst(), now);
+			decide(leaders.getFirst(), ResultReason.VOTE, now);
 		}
 		else {
-			moveTo(RoomStatus.REVOTING, now, null);
+			moveTo(RoomStatus.REVOTING, now, phaseDurations.voteSeconds());
 		}
 	}
 
+	/**
+	 * 재투표 중 → 결정. 재투표는 한 번뿐이라 이 단계 다음은 항상 결정이다.
+	 * <ul>
+	 * <li>1등이 하나면 그 메뉴로 결정한다.</li>
+	 * <li>또 동점이면 재투표의 1등끼리 중에서, 아무도 표를 내지 않았으면 재투표 후보 전체 중에서 서버가 무작위로 고른다.
+	 * 재투표에서 1등이 아닌 메뉴는 재투표에서 밀렸으므로 무작위 후보에서 빠진다.</li>
+	 * </ul>
+	 *
+	 * @param candidates 재투표 후보(첫 투표에서 동점이었던 메뉴들)
+	 */
+	public void finishRevote(VoteTally tally, List<Menu> candidates, RandomGenerator random, Instant now) {
+		requireStatus(RoomStatus.REVOTING);
+		if (!tally.hasNoVotes() && tally.leaders().size() == 1) {
+			decide(tally.leaders().getFirst(), ResultReason.REVOTE, now);
+			return;
+		}
+		List<Menu> pool = tally.hasNoVotes() ? candidates : tally.leaders();
+		decide(pool.get(random.nextInt(pool.size())), ResultReason.REVOTE_RANDOM, now);
+	}
+
+	/**
+	 * 지금(또는 마지막으로 끝난) 투표가 몇 번째 판인지. 투표 중이면 1, 재투표 중이면 2이고,
+	 * 끝난 방은 재투표로 결정됐으면 2, 아니면 1이다.
+	 */
+	public int voteRound() {
+		boolean revoted = status == RoomStatus.REVOTING || resultReason == ResultReason.REVOTE
+				|| resultReason == ResultReason.REVOTE_RANDOM;
+		return revoted ? Ballot.REVOTE_ROUND : Ballot.FIRST_ROUND;
+	}
+
 	/** 메뉴를 결정하고 끝낸다. 끝난 방에는 더 넘어갈 단계가 없다. */
-	private void decide(Menu menu, Instant now) {
+	private void decide(Menu menu, ResultReason reason, Instant now) {
 		this.resultMenu = menu;
+		this.resultName = menu.getName();
+		this.resultReason = reason;
 		moveTo(RoomStatus.FINISHED, now, null);
 	}
 
@@ -196,6 +239,16 @@ public class Room {
 	/** 결정된 메뉴. 끝나기 전이면 null */
 	public Menu getResultMenu() {
 		return resultMenu;
+	}
+
+	/** 결정된 이름. 끝나기 전이면 null */
+	public String getResultName() {
+		return resultName;
+	}
+
+	/** 어떻게 결정됐는지. 끝나기 전이면 null */
+	public ResultReason getResultReason() {
+		return resultReason;
 	}
 
 }

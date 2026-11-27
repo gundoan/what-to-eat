@@ -14,4 +14,8 @@ public interface BallotRepository extends JpaRepository<Ballot, Long> {
 	@Query("select b from Ballot b left join fetch b.votes where b.room = :room and b.voteRound = :voteRound")
 	List<Ballot> findWithVotesByRoomAndVoteRound(Room room, int voteRound);
 
+	/** 투표와 재투표의 투표지를 표까지 한 번에 읽는다. 화면 정보를 만들 때 쓴다. */
+	@Query("select b from Ballot b left join fetch b.votes where b.room = :room")
+	List<Ballot> findWithVotesByRoom(Room room);
+
 }

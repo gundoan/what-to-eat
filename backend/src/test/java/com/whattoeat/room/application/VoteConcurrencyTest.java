@@ -65,7 +65,7 @@ class VoteConcurrencyTest {
 
 		RoomState state = roomService.getRoom(room.code(), room.tokens().getFirst()).room();
 		assertThat(state.status()).isEqualTo(RoomStatus.FINISHED);
-		assertThat(state.resultMenu().id()).isEqualTo(favorite);
+		assertThat(state.result().name()).isEqualTo(room.menus().getFirst().name());
 		assertThat(ballots(room)).hasSize(Room.MAX_PARTICIPANTS);
 	}
 

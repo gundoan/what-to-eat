@@ -55,7 +55,7 @@ class VoteTimeoutTest {
 
 		RoomState state = state(room);
 		assertThat(state.status()).isEqualTo(RoomStatus.FINISHED);
-		assertThat(state.resultMenu().name()).isEqualTo("라면");
+		assertThat(state.result().name()).isEqualTo("라면");
 	}
 
 	@Test

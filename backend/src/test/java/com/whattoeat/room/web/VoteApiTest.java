@@ -229,7 +229,7 @@ class VoteApiTest {
 			api.vote(room.code(), room.person(2), Map.of(ramen, -1))
 				.andExpect(jsonPath("$.room.status").value("FINISHED"))
 				.andExpect(jsonPath("$.room.phaseEndsAt", nullValue()))
-				.andExpect(jsonPath("$.room.resultMenu.name").value("김밥"))
+				.andExpect(jsonPath("$.room.result.name").value("김밥"))
 				.andExpect(jsonPath("$.room.voteScores[*].menu.name", contains("김밥", "라면", "짜장면")))
 				.andExpect(jsonPath("$.room.voteScores[*].total", contains(2, 0, -1)))
 				.andExpect(jsonPath("$.room.voteScores[1].plus").value(1))
@@ -247,7 +247,7 @@ class VoteApiTest {
 			api.vote(room.code(), room.person(0), Map.of(kimbap, -1, ramen, -1));
 			api.vote(room.code(), room.person(1), Map.of(kimbap, -1));
 			api.vote(room.code(), room.person(2), Map.of(ramen, -1, jjajang, -1))
-				.andExpect(jsonPath("$.room.resultMenu.name").value("짜장면"));
+				.andExpect(jsonPath("$.room.result.name").value("짜장면"));
 		}
 
 		@Test
@@ -257,7 +257,7 @@ class VoteApiTest {
 
 			api.vote(room.code(), room.person(0), Map.of(menuId(room, "김밥"), -1));
 			api.vote(room.code(), room.person(1), Map.of(menuId(room, "라면"), -1));
-			api.voteAllGood(room.code(), room.person(2)).andExpect(jsonPath("$.room.resultMenu.name").value("짜장면"));
+			api.voteAllGood(room.code(), room.person(2)).andExpect(jsonPath("$.room.result.name").value("짜장면"));
 		}
 
 		@Test
@@ -269,7 +269,7 @@ class VoteApiTest {
 			api.vote(room.code(), room.person(1), Map.of(menuId(room, "라면"), 1));
 			api.voteAllGood(room.code(), room.person(2))
 				.andExpect(jsonPath("$.room.status").value("FINISHED"))
-				.andExpect(jsonPath("$.room.resultMenu.name").value("라면"));
+				.andExpect(jsonPath("$.room.result.name").value("라면"));
 		}
 
 		@Test
@@ -281,7 +281,7 @@ class VoteApiTest {
 			api.vote(room.code(), room.person(1), Map.of(menuId(room, "라면"), 1));
 			api.voteAllGood(room.code(), room.person(2))
 				.andExpect(jsonPath("$.room.status").value("REVOTING"))
-				.andExpect(jsonPath("$.room.resultMenu", nullValue()))
+				.andExpect(jsonPath("$.room.result", nullValue()))
 				.andExpect(jsonPath("$.room.voteScores[*].total", contains(1, 1, 0)));
 		}
 
@@ -304,7 +304,7 @@ class VoteApiTest {
 
 			api.nextPhase(room.code(), room.host(), "VOTING")
 				.andExpect(jsonPath("$.room.status").value("FINISHED"))
-				.andExpect(jsonPath("$.room.resultMenu.name").value("짜장면"));
+				.andExpect(jsonPath("$.room.result.name").value("짜장면"));
 		}
 
 		@Test
@@ -320,8 +320,8 @@ class VoteApiTest {
 
 			List<Map<String, Object>> scores = JsonPath.read(body, "$.room.voteScores");
 			assertThat(scores).allSatisfy(score -> assertThat(score).containsOnlyKeys("menu", "plus", "minus", "total"));
-			Map<String, Object> resultMenu = JsonPath.read(body, "$.room.resultMenu");
-			assertThat(resultMenu).containsOnlyKeys("id", "name");
+			Map<String, Object> result = JsonPath.read(body, "$.room.result");
+			assertThat(result).containsOnlyKeys("name", "reason");
 		}
 
 	}

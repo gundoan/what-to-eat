@@ -31,8 +31,11 @@ import jakarta.persistence.Table;
 @Table(name = "ballot")
 public class Ballot {
 
-	/** 첫 투표. 동점일 때의 재투표(기능 5)는 2판이다. */
+	/** 첫 투표 */
 	public static final int FIRST_ROUND = 1;
+
+	/** 첫 투표가 동점일 때의 재투표. 재투표는 한 번뿐이다. */
+	public static final int REVOTE_ROUND = 2;
 
 	/** 한 사람이 한 판에 낼 수 있는 표의 수 */
 	public static final int MAX_VOTES = 2;

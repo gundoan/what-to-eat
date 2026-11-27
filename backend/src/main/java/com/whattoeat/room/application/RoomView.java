@@ -17,8 +17,8 @@ public record RoomView(RoomState room, Me me) {
 	 * @param pendingGroupId 내 답을 기다리는 합치기 그룹(자동 그룹이나 내가 받은 직접 요청)의 번호. 없으면 null
 	 * @param sentGroupId 내가 보내고 상대의 답을 기다리는 직접 요청의 번호. 없으면 null
 	 * @param requestableMenuIds 지금 내가 직접 합치기를 요청할 수 있는 메뉴들의 번호
-	 * @param ballot 내가 낸 투표지. 아직 내지 않았으면 null
-	 * @param done 내가 지금 단계(제안, 합치기, 투표)에서 할 일을 끝냈는지
+	 * @param ballot 내가 이번 판(투표 또는 재투표)에 낸 투표지. 아직 내지 않았으면 null
+	 * @param done 내가 지금 단계(제안, 합치기, 투표, 재투표)에서 할 일을 끝냈는지
 	 */
 	public record Me(boolean host, String proposal, boolean allGood, String menuId, String mergedInto,
 			String pendingGroupId, String sentGroupId, List<String> requestableMenuIds, BallotItem ballot,

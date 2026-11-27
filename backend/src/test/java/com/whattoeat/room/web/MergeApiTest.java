@@ -277,7 +277,7 @@ class MergeApiTest {
 					? host : guest;
 			api.finishMerge(created.code(), representativeOwner)
 				.andExpect(jsonPath("$.room.status").value("FINISHED"))
-				.andExpect(jsonPath("$.room.resultMenu", notNullValue()));
+				.andExpect(jsonPath("$.room.result", notNullValue()));
 		}
 
 		@Test

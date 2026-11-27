@@ -289,7 +289,7 @@ class ProposalApiTest {
 
 			api.propose(room.code(), room.host(), "제육")
 				.andExpect(jsonPath("$.room.status").value("FINISHED"))
-				.andExpect(jsonPath("$.room.resultMenu.name").value("제육"))
+				.andExpect(jsonPath("$.room.result.name").value("제육"))
 				.andExpect(jsonPath("$.room.voteScores", empty()))
 				.andExpect(jsonPath("$.room.mergeGroups", empty()));
 		}

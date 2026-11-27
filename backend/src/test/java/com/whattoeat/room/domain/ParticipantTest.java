@@ -81,17 +81,25 @@ class ParticipantTest {
 				.isTrue();
 		}
 
+		@Test
+		@DisplayName("재투표도 이번 판(재투표)의 투표지를 냈으면 끝낸 것이다")
+		void finishedWhenRevoteBallotSubmitted() {
+			assertThat(participant.hasFinished(RoomStatus.REVOTING, null, null)).isFalse();
+			assertThat(participant.hasFinished(RoomStatus.REVOTING, null,
+					Ballot.allGood(room, participant, Ballot.REVOTE_ROUND, NOW)))
+				.isTrue();
+		}
+
 	}
 
 	@Test
-	@DisplayName("대기 중, 아직 만들지 않은 단계(재투표, 랜덤 선택), 끝난 방에서는 끝낸 것으로 보지 않는다")
+	@DisplayName("대기 중, 랜덤 선택(뽑힌 한 사람만 할 일이 있음), 끝난 방에서는 끝낸 것으로 보지 않는다")
 	void otherPhasesAreNeverFinished() {
 		participant.markProposalAllGood();
 		participant.markMergeDone();
 		Ballot ballot = Ballot.allGood(room, participant, Ballot.FIRST_ROUND, NOW);
 
 		assertThat(participant.hasFinished(RoomStatus.WAITING, null, ballot)).isFalse();
-		assertThat(participant.hasFinished(RoomStatus.REVOTING, null, ballot)).isFalse();
 		assertThat(participant.hasFinished(RoomStatus.RANDOM_PICK, null, ballot)).isFalse();
 		assertThat(participant.hasFinished(RoomStatus.FINISHED, null, ballot)).isFalse();
 	}

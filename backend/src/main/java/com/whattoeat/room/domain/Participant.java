@@ -91,7 +91,7 @@ public class Participant {
 	 * 지금 단계에서 할 일을 끝냈는지. "N명 중 M명 끝냄"과 "모두 끝내면 바로 다음 단계로"가 모두 이 기준 하나를 쓴다.
 	 *
 	 * @param myMenu 이 참여자가 낸 메뉴. 내지 않았으면 null
-	 * @param myBallot 이 참여자가 지금 판에 낸 투표지. 내지 않았으면 null
+	 * @param myBallot 이 참여자가 지금 판(투표 또는 재투표)에 낸 투표지. 내지 않았으면 null
 	 */
 	public boolean hasFinished(RoomStatus phase, Menu myMenu, Ballot myBallot) {
 		return switch (phase) {
@@ -99,10 +99,10 @@ public class Participant {
 			case PROPOSING -> myMenu != null || proposalAllGood;
 			// "합치기 끝냄"을 눌렀거나, 합칠 메뉴가 없다(제안하지 않았거나, 메뉴가 합쳐져서 사라졌다).
 			case MERGING -> mergeDone || myMenu == null || myMenu.isMerged();
-			// 표를 냈거나 "다 좋음"을 눌렀다(둘 다 투표지를 낸 것이다).
-			case VOTING -> myBallot != null;
-			// 대기 중은 방장의 "시작"으로만 넘어가고, 재투표와 랜덤 선택은 기능 5에서 정한다. 끝난 방은 할 일이 없다.
-			case WAITING, REVOTING, RANDOM_PICK, FINISHED -> false;
+			// 이번 판에 표를 냈거나 "다 좋음"을 눌렀다(둘 다 투표지를 낸 것이다).
+			case VOTING, REVOTING -> myBallot != null;
+			// 대기 중은 방장의 "시작"으로만 넘어간다. 랜덤 선택은 뽑힌 한 사람만 할 일이 있어서 "모두 끝냄"이 없다.
+			case WAITING, RANDOM_PICK, FINISHED -> false;
 		};
 	}
 

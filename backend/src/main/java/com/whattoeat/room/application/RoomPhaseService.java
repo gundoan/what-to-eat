@@ -5,6 +5,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.random.RandomGenerator;
 
 import com.whattoeat.common.error.BusinessException;
 import com.whattoeat.common.error.ErrorCode;
@@ -57,12 +58,14 @@ public class RoomPhaseService {
 
 	private final TransactionTemplate transactionTemplate;
 
+	private final RandomGenerator random;
+
 	private final Clock clock;
 
 	RoomPhaseService(RoomRepository roomRepository, ParticipantRepository participantRepository,
 			MenuRepository menuRepository, BallotRepository ballotRepository, MergePhase mergePhase, RoomAccess access,
 			RoomStateAssembler assembler, ApplicationEventPublisher events, TransactionTemplate transactionTemplate,
-			Clock clock) {
+			RandomGenerator random, Clock clock) {
 		this.roomRepository = roomRepository;
 		this.participantRepository = participantRepository;
 		this.menuRepository = menuRepository;
@@ -72,6 +75,7 @@ public class RoomPhaseService {
 		this.assembler = assembler;
 		this.events = events;
 		this.transactionTemplate = transactionTemplate;
+		this.random = random;
 		this.clock = clock;
 	}
 
@@ -131,14 +135,15 @@ public class RoomPhaseService {
 
 	/** "끝냈다"의 기준은 단계마다 다르고, {@link Participant#hasFinished}에 한곳으로 모여 있다. */
 	private boolean isEveryoneFinished(Room room) {
-		// 대기 중은 방장의 "시작"으로만 넘어가고, 재투표와 랜덤 선택은 기능 5에서 만든다. 끝난 방은 넘어갈 곳이 없다.
+		// 대기 중은 방장의 "시작"으로만 넘어가고, 랜덤 선택은 뽑힌 한 사람만 할 일이 있다. 끝난 방은 넘어갈 곳이 없다.
 		RoomStatus status = room.getStatus();
-		if (status != RoomStatus.PROPOSING && status != RoomStatus.MERGING && status != RoomStatus.VOTING) {
+		if (status != RoomStatus.PROPOSING && status != RoomStatus.MERGING && status != RoomStatus.VOTING
+				&& status != RoomStatus.REVOTING) {
 			return false;
 		}
 		Map<Long, Menu> menuByParticipantId = Menu.byParticipantId(menuRepository.findSortedByRoom(room));
 		Map<Long, Ballot> ballotByParticipantId = Ballot
-			.byParticipantId(ballotRepository.findWithVotesByRoomAndVoteRound(room, Ballot.FIRST_ROUND));
+			.byParticipantId(ballotRepository.findWithVotesByRoomAndVoteRound(room, room.voteRound()));
 		return participantRepository.findByRoom(room)
 			.stream()
 			.allMatch(participant -> participant.hasFinished(status, menuByParticipantId.get(participant.getId()),
@@ -156,6 +161,9 @@ public class RoomPhaseService {
 		return true;
 	}
 
+	/**
+	 * 지금 단계를 끝내고 다음으로 넘긴다. 방장의 "다음 단계로", 시간 초과, "모두 끝냄"이 모두 여기로 온다.
+	 */
 	private void moveToNextPhase(Room room, Instant now) {
 		switch (room.getStatus()) {
 			case WAITING -> room.startProposal(now);
@@ -174,8 +182,15 @@ public class RoomPhaseService {
 				List<Ballot> ballots = ballotRepository.findWithVotesByRoomAndVoteRound(room, Ballot.FIRST_ROUND);
 				room.finishVoting(VoteTally.count(candidates, ballots), now);
 			}
-			// 재투표와 랜덤 선택의 다음 단계는 기능 5에서 만든다. 끝난 방은 더 넘어갈 곳이 없다.
-			case REVOTING, RANDOM_PICK, FINISHED -> throw new BusinessException(ErrorCode.NO_NEXT_PHASE);
+			case REVOTING -> {
+				List<Menu> remaining = Menu.remaining(menuRepository.findSortedByRoom(room));
+				List<Menu> candidates = VoteTally.candidates(Ballot.REVOTE_ROUND, remaining,
+						ballotRepository.findWithVotesByRoomAndVoteRound(room, Ballot.FIRST_ROUND));
+				List<Ballot> ballots = ballotRepository.findWithVotesByRoomAndVoteRound(room, Ballot.REVOTE_ROUND);
+				room.finishRevote(VoteTally.count(candidates, ballots), candidates, random, now);
+			}
+			// 랜덤 선택의 실제 동작은 기능 5에서 만든다. 끝난 방은 더 넘어갈 곳이 없다.
+			case RANDOM_PICK, FINISHED -> throw new BusinessException(ErrorCode.NO_NEXT_PHASE);
 		}
 	}
 

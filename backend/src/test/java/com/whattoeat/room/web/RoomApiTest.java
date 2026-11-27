@@ -210,7 +210,7 @@ class RoomApiTest {
 				.andExpect(jsonPath("$.code").value("VOTING_ENDED"));
 			mockMvc.perform(post("/api/rooms/" + room.code() + "/participants").cookie(room.cookie()))
 				.andExpect(status().isOk())
-				.andExpect(jsonPath("$.room.resultMenu.name").value("kimbap"));
+				.andExpect(jsonPath("$.room.result.name").value("kimbap"));
 		}
 
 		@Test
@@ -274,7 +274,8 @@ class RoomApiTest {
 			Map<String, Object> me = JsonPath.read(body, "$.me");
 			assertThat(response).containsOnlyKeys("room", "me");
 			assertThat(roomState).containsOnlyKeys("code", "status", "phaseDurations", "participantCount", "phaseEndsAt",
-					"serverTime", "menus", "doneCount", "mergeGroups", "resultMenu", "voteScores");
+					"serverTime", "menus", "doneCount", "mergeGroups", "voteCandidates", "voteScores", "revoteScores",
+					"result");
 			assertThat(me).containsOnlyKeys("host", "proposal", "allGood", "menuId", "mergedInto", "pendingGroupId",
 					"sentGroupId", "requestableMenuIds", "ballot", "done");
 		}
