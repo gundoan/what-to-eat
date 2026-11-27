@@ -28,11 +28,6 @@ export function RandomPickPhase({ room, me, actions }: Props) {
   const why = room.menus.length === 0 ? '아무도 메뉴를 제안하지 않아서' : '아무도 투표하지 않아서'
   const timeRule = pickTimeRule(room)
 
-  function pickSomeoneElse() {
-    // 방장은 메뉴를 정하지 않는다. 뽑힌 사람이 자리에 없을 때 다른 사람에게 넘기기만 한다.
-    if (window.confirm('지금 뽑힌 사람 대신 다른 사람을 뽑을까요?')) actions.nextPhase()
-  }
-
   return (
     <section>
       <Countdown room={room} />
@@ -53,7 +48,8 @@ export function RandomPickPhase({ room, me, actions }: Props) {
               ? '모두 한 번씩 뽑혔는데 아직 아무도 정하지 않았어요. 다른 사람 뽑기를 누르면 처음부터 다시 뽑아요.'
               : '뽑힌 사람이 자리에 없는 것 같으면 다른 사람을 뽑을 수 있어요.'}
           </p>
-          <button type="button" onClick={pickSomeoneElse}>
+          {/* 방장은 메뉴를 정하지 않는다. 뽑힌 사람이 자리에 없을 때 다른 사람에게 넘기기만 한다. */}
+          <button type="button" onClick={actions.nextPhase}>
             다른 사람 뽑기
           </button>
         </>
