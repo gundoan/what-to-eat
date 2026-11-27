@@ -26,6 +26,7 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
  * <li>방 상태는 모두에게 같고, 본인 정보(me)는 연결마다 그 연결을 연 참여자 것만 붙인다. 다른 사람의 정보는 보내지 않는다.</li>
  * <li>보낼 때마다 DB에서 최신 상태를 다시 읽고, 같은 방에 대한 읽기와 보내기는 한 번에 하나씩 한다.
  * 그래서 늦게 읽은(더 최신인) 상태가 먼저 읽은 상태보다 먼저 도착하는 일이 없다.</li>
+ * <li>방 상태에는 "지금 접속 중"인 사람 수도 들어 있다. 새 사람이 방 화면을 열거나, 끊긴 연결을 정리해서 이 숫자가 바뀌면 모두에게 다시 보낸다.</li>
  * </ul>
  */
 @Component
@@ -62,9 +63,16 @@ public class RoomEventBroadcaster {
 		emitter.onError(error -> channels.remove(roomCode, subscriber));
 
 		synchronized (channel) {
-			roomStateReader.read(roomCode)
-				.flatMap(views -> views.viewOf(participantId))
-				.ifPresent(view -> send(roomCode, subscriber, view));
+			if (channel.connectedCountChanged()) {
+				// 새 사람이 방 화면을 열어서 "지금 접속 중"이 늘었다. 모두에게 보낸다(새 연결도 이걸로 현재 화면을 받는다).
+				sendToAll(roomCode, channel);
+			}
+			else {
+				// 이미 접속 중인 사람이 탭을 하나 더 열었거나 다시 연결했다. 인원은 그대로라 새 연결에만 보낸다.
+				roomStateReader.read(roomCode)
+					.flatMap(views -> views.viewOf(participantId))
+					.ifPresent(view -> send(roomCode, subscriber, view));
+			}
 		}
 		return emitter;
 	}
@@ -83,20 +91,20 @@ public class RoomEventBroadcaster {
 		}
 	}
 
-	/** 방 상태와 모든 사람의 정보를 한 번만 읽고, 연결마다 그 연결 주인의 정보를 붙여 보낸다. */
+	/** 방의 모든 연결에 최신 화면 정보를 보낸다. */
 	public void broadcast(String roomCode) {
 		channels.find(roomCode).ifPresent(channel -> {
 			synchronized (channel) {
-				roomStateReader.read(roomCode).ifPresent(views -> {
-					for (Subscriber subscriber : channel.subscribers()) {
-						views.viewOf(subscriber.participantId()).ifPresent(view -> send(roomCode, subscriber, view));
-					}
-				});
+				sendToAll(roomCode, channel);
 			}
 		});
 	}
 
-	/** 오래 조용한 연결은 중간의 프록시가 끊을 수 있어서, 25초마다 내용 없는 주석 줄을 보낸다. 끊긴 연결도 이때 정리된다. */
+	/**
+	 * 오래 조용한 연결은 중간의 프록시가 끊을 수 있어서, 25초마다 내용 없는 주석 줄을 보낸다.
+	 * 서버는 끊긴 연결에 무언가를 보내 봐야 끊긴 것을 알 수 있어서, 끊긴 연결도 이때 정리된다.
+	 * 정리해서 "지금 접속 중"이 줄었으면 남은 사람들에게 바뀐 인원을 알린다.
+	 */
 	@Scheduled(fixedRate = 25, timeUnit = TimeUnit.SECONDS)
 	public void sendHeartbeat() {
 		channels.forEach((roomCode, channel) -> {
@@ -109,7 +117,23 @@ public class RoomEventBroadcaster {
 						channels.remove(roomCode, subscriber);
 					}
 				}
+				if (channel.connectedCountChanged()) {
+					sendToAll(roomCode, channel);
+				}
 			}
+		});
+	}
+
+	/**
+	 * 방 상태와 모든 사람의 정보를 한 번만 읽고, 연결마다 그 연결 주인의 정보를 붙여 보낸다. 채널로 동기화한 채로 불러야 한다.
+	 * 보내다가 끊긴 연결이 나와서 인원이 바뀌면, 다음 하트비트 때 바뀐 인원을 다시 보낸다.
+	 */
+	private void sendToAll(String roomCode, RoomChannel channel) {
+		roomStateReader.read(roomCode).ifPresent(views -> {
+			for (Subscriber subscriber : channel.subscribers()) {
+				views.viewOf(subscriber.participantId()).ifPresent(view -> send(roomCode, subscriber, view));
+			}
+			channel.markSent(views.room().connectedCount());
 		});
 	}
 

@@ -315,13 +315,14 @@ class RoomApiTest {
 				.getContentAsString();
 
 			// 응답에 정해진 항목 말고는 아무것도 없어야 한다. 항목이 하나라도 늘면 이 테스트가 알려준다.
+			// connectedCount(지금 접속 중)는 숫자뿐이고 누가 접속 중인지는 없어서 넣어도 된다.
 			Map<String, Object> response = JsonPath.read(body, "$");
 			Map<String, Object> roomState = JsonPath.read(body, "$.room");
 			Map<String, Object> me = JsonPath.read(body, "$.me");
 			assertThat(response).containsOnlyKeys("room", "me");
-			assertThat(roomState).containsOnlyKeys("code", "status", "phaseDurations", "participantCount", "phaseEndsAt",
-					"serverTime", "menus", "doneCount", "mergeGroups", "voteCandidates", "voteScores", "revoteScores",
-					"pickTurn", "result");
+			assertThat(roomState).containsOnlyKeys("code", "status", "phaseDurations", "participantCount",
+					"connectedCount", "phaseEndsAt", "serverTime", "menus", "doneCount", "mergeGroups", "voteCandidates",
+					"voteScores", "revoteScores", "pickTurn", "result");
 			assertThat(me).containsOnlyKeys("host", "proposal", "allGood", "menuId", "mergedInto", "pendingGroupId",
 					"sentGroupId", "requestableMenuIds", "ballot", "picking", "done");
 		}

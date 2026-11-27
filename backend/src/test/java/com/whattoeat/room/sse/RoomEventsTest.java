@@ -8,6 +8,7 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.util.List;
+import java.util.Optional;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -16,6 +17,7 @@ import com.whattoeat.IntegrationTest;
 import com.whattoeat.room.web.ParticipantCookie;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.web.server.LocalServerPort;
 
 /**
@@ -30,6 +32,9 @@ class RoomEventsTest {
 
 	@LocalServerPort
 	int port;
+
+	@Autowired
+	RoomEventBroadcaster broadcaster;
 
 	private final HttpClient http = HttpClient.newHttpClient();
 
@@ -50,6 +55,63 @@ class RoomEventsTest {
 
 			String updated = events.nextEventData(RoomEventBroadcaster.ROOM_EVENT, WAIT);
 			assertThat(JsonPath.<Integer>read(updated, "$.room.participantCount")).isEqualTo(2);
+			assertThat(connectedCountOf(updated)).as("참여는 했지만 아직 방 화면(SSE)을 열지 않았다").isEqualTo(1);
+		}
+	}
+
+	@Test
+	@DisplayName("다른 사람이 방 화면을 열면 모두가 '지금 접속 중'이 늘어난 것을 받고, 닫으면 줄어든 것을 받는다. 참여 인원은 그대로다")
+	void connectedCountFollowsConnections() throws Exception {
+		HttpResponse<String> created = post("/api/rooms", null);
+		String code = codeOf(created.body());
+		String hostCookie = cookieOf(created);
+		String guestCookie = cookieOf(post("/api/rooms/" + code + "/participants", null));
+
+		try (SseTestConnection hostEvents = connect(code, hostCookie)) {
+			assertThat(connectedCountOf(hostEvents.nextEventData(RoomEventBroadcaster.ROOM_EVENT, WAIT))).isEqualTo(1);
+
+			try (SseTestConnection guestEvents = connect(code, guestCookie)) {
+				assertThat(connectedCountOf(guestEvents.nextEventData(RoomEventBroadcaster.ROOM_EVENT, WAIT)))
+					.isEqualTo(2);
+				assertThat(connectedCountOf(hostEvents.nextEventData(RoomEventBroadcaster.ROOM_EVENT, WAIT)))
+					.isEqualTo(2);
+			} // 손님이 방 화면을 닫는다.
+
+			String afterLeave = nextEventAfterHeartbeats(hostEvents);
+			assertThat(connectedCountOf(afterLeave)).isEqualTo(1);
+			assertThat(JsonPath.<Integer>read(afterLeave, "$.room.participantCount")).as("참여 인원은 줄지 않는다").isEqualTo(2);
+		}
+	}
+
+	@Test
+	@DisplayName("한 사람이 방 화면을 여러 개(탭) 열어도 '지금 접속 중'은 한 명으로 센다")
+	void countsOnePersonOnceEvenWithManyTabs() throws Exception {
+		HttpResponse<String> created = post("/api/rooms", null);
+		String code = codeOf(created.body());
+		String hostCookie = cookieOf(created);
+		String guestCookie = cookieOf(post("/api/rooms/" + code + "/participants", null));
+
+		try (SseTestConnection firstTab = connect(code, hostCookie);
+				SseTestConnection secondTab = connect(code, hostCookie);
+				SseTestConnection guestEvents = connect(code, guestCookie)) {
+			assertThat(connectedCountOf(firstTab.nextEventData(RoomEventBroadcaster.ROOM_EVENT, WAIT))).isEqualTo(1);
+			assertThat(connectedCountOf(secondTab.nextEventData(RoomEventBroadcaster.ROOM_EVENT, WAIT))).isEqualTo(1);
+			assertThat(connectedCountOf(guestEvents.nextEventData(RoomEventBroadcaster.ROOM_EVENT, WAIT))).isEqualTo(2);
+		}
+	}
+
+	@Test
+	@DisplayName("요청에 대한 응답에도 '지금 접속 중'이 있고, 요청한 사람은 아직 방 화면(SSE)을 열기 전이어도 접속 중으로 센다")
+	void responseCountsRequesterAsConnected() throws Exception {
+		HttpResponse<String> created = post("/api/rooms", null);
+		String code = codeOf(created.body());
+
+		try (SseTestConnection hostEvents = connect(code, cookieOf(created))) {
+			hostEvents.nextEventData(RoomEventBroadcaster.ROOM_EVENT, WAIT);
+
+			// 새로 들어온 사람은 참여 응답을 받은 뒤에 SSE로 연결한다. 그 응답에 자기를 뺀 인원이 보이면 안 된다.
+			HttpResponse<String> joined = post("/api/rooms/" + code + "/participants", null);
+			assertThat(connectedCountOf(joined.body())).isEqualTo(2);
 		}
 	}
 
@@ -67,6 +129,8 @@ class RoomEventsTest {
 				SseTestConnection guestEvents = connect(code, guestCookie)) {
 			hostEvents.nextEventData(RoomEventBroadcaster.ROOM_EVENT, WAIT); // 연결 직후의 현재 상태
 			guestEvents.nextEventData(RoomEventBroadcaster.ROOM_EVENT, WAIT);
+			// 손님이 방 화면을 열어서 "지금 접속 중"이 2명이 된 것을 방장도 받는다.
+			assertThat(connectedCountOf(hostEvents.nextEventData(RoomEventBroadcaster.ROOM_EVENT, WAIT))).isEqualTo(2);
 
 			assertThat(send("PUT", "/api/rooms/" + code + "/me/proposal", guestCookie, "{\"menuName\": \"김밥\"}")
 				.statusCode()).isEqualTo(200);
@@ -198,6 +262,25 @@ class RoomEventsTest {
 			}
 		}
 		throw new AssertionError("상태가 " + status + "인 이벤트를 받지 못했다");
+	}
+
+	/**
+	 * 서버는 끊긴 연결에 무언가를 보내 봐야 끊긴 것을 안다(한두 번은 보내기가 성공한 것처럼 보일 수 있다).
+	 * 하트비트를 기다리지 않고 직접 보내면서, 끊긴 연결을 정리한 뒤의 이벤트를 기다린다.
+	 */
+	private String nextEventAfterHeartbeats(SseTestConnection events) throws Exception {
+		for (int i = 0; i < 20; i++) {
+			broadcaster.sendHeartbeat();
+			Optional<String> data = events.pollEventData(RoomEventBroadcaster.ROOM_EVENT, Duration.ofMillis(250));
+			if (data.isPresent()) {
+				return data.get();
+			}
+		}
+		throw new AssertionError("끊긴 연결을 정리한 뒤의 이벤트를 받지 못했다");
+	}
+
+	private static int connectedCountOf(String json) {
+		return JsonPath.read(json, "$.room.connectedCount");
 	}
 
 	private HttpResponse<String> post(String path, String cookie) throws Exception {
