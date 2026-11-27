@@ -4,7 +4,6 @@ import { FinishedPhase } from '../components/phases/FinishedPhase'
 import { MergingPhase } from '../components/phases/MergingPhase'
 import { ProposingPhase } from '../components/phases/ProposingPhase'
 import { RandomPickPhase } from '../components/phases/RandomPickPhase'
-import { RevotingPhase } from '../components/phases/RevotingPhase'
 import { VotingPhase } from '../components/phases/VotingPhase'
 import { WaitingPhase } from '../components/phases/WaitingPhase'
 import { useRoom, type RoomError } from '../hooks/useRoom'
@@ -61,8 +60,10 @@ export function RoomPage() {
       )}
       {room.status === 'PROPOSING' && <ProposingPhase room={room} me={me} actions={actions} />}
       {room.status === 'MERGING' && <MergingPhase room={room} me={me} actions={actions} />}
-      {room.status === 'VOTING' && <VotingPhase room={room} me={me} actions={actions} />}
-      {room.status === 'REVOTING' && <RevotingPhase scores={room.voteScores} />}
+      {(room.status === 'VOTING' || room.status === 'REVOTING') && (
+        // key를 단계로 줘서, 재투표가 시작되면 고르던 표를 버리고 새 투표지로 시작한다.
+        <VotingPhase key={room.status} room={room} me={me} actions={actions} />
+      )}
       {room.status === 'RANDOM_PICK' && <RandomPickPhase />}
       {room.status === 'FINISHED' && <FinishedPhase room={room} me={me} />}
 
