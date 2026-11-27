@@ -76,7 +76,7 @@ export type RoomState = {
   status: RoomStatus
   phaseDurations: PhaseDurations
   participantCount: number
-  /** 지금 단계가 끝나는 시각(ISO 문자열). 시간 제한이 없는 단계면 null */
+  /** 지금 단계가 끝나는 시각(ISO 문자열). 시간 제한이 없는 단계면 null. 랜덤 선택에서 모두 한 번씩 뽑혀 자동 다시 뽑기가 멈췄을 때도 null */
   phaseEndsAt: string | null
   /** 이 상태를 만든 순간의 서버 시각(ISO 문자열) */
   serverTime: string

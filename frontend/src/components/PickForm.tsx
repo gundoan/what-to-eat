@@ -4,6 +4,8 @@ import type { MenuItem } from '../types/room'
 type Props = {
   /** 남아 있는 메뉴. 눌러서 바로 고를 수 있게 보여준다. 아무도 메뉴를 내지 않았으면 비어 있다 */
   menus: MenuItem[]
+  /** 시간 안에 정해야 하는지. 모두 한 번씩 뽑혀 자동 다시 뽑기가 멈췄으면 false(시간 제한 없음) */
+  timeLimited: boolean
   onDecide: (menuName: string) => void
 }
 
@@ -11,7 +13,7 @@ type Props = {
  * 랜덤으로 뽑힌 사람이 메뉴를 정하는 곳. 나온 메뉴를 눌러도 되고, 아무 이름이나 직접 써도 된다(1~30자).
  * 정하는 순간 모두에게 결정으로 공개되고 바꿀 수 없어서, 한 번 더 확인한다.
  */
-export function PickForm({ menus, onDecide }: Props) {
+export function PickForm({ menus, timeLimited, onDecide }: Props) {
   const [menuName, setMenuName] = useState('')
 
   function decide(name: string) {
@@ -25,7 +27,11 @@ export function PickForm({ menus, onDecide }: Props) {
       <p>
         <strong>내가 뽑혔어요!</strong> 먹을 메뉴를 정해 주세요.
       </p>
-      <p className="hint">시간 안에 정하지 않으면 다른 사람이 뽑혀요.</p>
+      <p className="hint">
+        {timeLimited
+          ? '시간 안에 정하지 않으면 다른 사람이 뽑혀요.'
+          : '모두 한 번씩 뽑혀서 시간 제한이 없어요. 천천히 정해도 돼요.'}
+      </p>
 
       {menus.length > 0 && (
         <>
