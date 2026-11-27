@@ -75,8 +75,9 @@ public class RoomController {
 	}
 
 	/**
-	 * 방장의 "시작"(대기 중일 때)과 "다음 단계로"(그 밖의 단계).
+	 * 방장의 "시작"(대기 중일 때), "다음 단계로"(그 밖의 단계), "다른 사람 뽑기"(랜덤 선택일 때).
 	 * from에 방장 화면에 보이던 단계를 보내야 한다. 이미 넘어갔으면 409로 거절해서 두 번 눌러도 한 단계만 넘어간다.
+	 * 랜덤 선택에서는 단계 이름이 그대로라서, 화면에 보이던 뽑기 차례 번호(pickTurn)도 함께 보내야 한다.
 	 */
 	@PostMapping("/{code}/next-phase")
 	public RoomView nextPhase(@PathVariable String code,
@@ -85,7 +86,7 @@ public class RoomController {
 		if (request.from() == null) {
 			throw new BusinessException(ErrorCode.INVALID_REQUEST);
 		}
-		return phaseService.advanceByHost(code, token, request.from());
+		return phaseService.advanceByHost(code, token, request.from(), request.pickTurn());
 	}
 
 	/**
@@ -102,7 +103,11 @@ public class RoomController {
 	public record CreateRoomResponse(String code) {
 	}
 
-	public record NextPhaseRequest(RoomStatus from) {
+	/**
+	 * @param from 방장 화면에 보이던 단계
+	 * @param pickTurn 랜덤 선택일 때 방장 화면에 보이던 뽑기 차례 번호. 다른 단계에서는 보내지 않는다
+	 */
+	public record NextPhaseRequest(RoomStatus from, Integer pickTurn) {
 	}
 
 }

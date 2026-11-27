@@ -139,7 +139,7 @@ class MergeConcurrencyTest {
 		for (int i = 1; i < people; i++) {
 			tokens.add(roomService.join(created.code(), null).newToken());
 		}
-		phaseService.advanceByHost(created.code(), created.token(), RoomStatus.WAITING);
+		phaseService.advanceByHost(created.code(), created.token(), RoomStatus.WAITING, null);
 		for (int i = 0; i < people; i++) {
 			proposalService.propose(created.code(), tokens.get(i), menuOf.apply(i));
 		}

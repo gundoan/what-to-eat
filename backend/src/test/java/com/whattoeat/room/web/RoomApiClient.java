@@ -60,6 +60,20 @@ final class RoomApiClient {
 			.content("{\"from\": \"" + from + "\"}"));
 	}
 
+	/** 랜덤 선택에서 방장의 "다른 사람 뽑기". 화면에 보이던 뽑기 차례 번호를 함께 보낸다. */
+	ResultActions pickSomeoneElse(String code, Cookie cookie, int pickTurn) throws Exception {
+		return mockMvc.perform(post("/api/rooms/" + code + "/next-phase").cookie(cookie)
+			.contentType(MediaType.APPLICATION_JSON)
+			.content("{\"from\": \"RANDOM_PICK\", \"pickTurn\": " + pickTurn + "}"));
+	}
+
+	/** 랜덤 선택에서 뽑힌 사람이 메뉴 이름을 정한다. */
+	ResultActions decidePick(String code, Cookie cookie, String menuName) throws Exception {
+		return mockMvc.perform(post("/api/rooms/" + code + "/me/pick").cookie(cookie)
+			.contentType(MediaType.APPLICATION_JSON)
+			.content("{\"menuName\": " + jsonString(menuName) + "}"));
+	}
+
 	ResultActions propose(String code, Cookie cookie, String menuName) throws Exception {
 		return mockMvc.perform(put("/api/rooms/" + code + "/me/proposal").cookie(cookie)
 			.contentType(MediaType.APPLICATION_JSON)
@@ -189,6 +203,35 @@ final class RoomApiClient {
 			return people.get(index);
 		}
 
+	}
+
+	/**
+	 * people명이 들어와 시작한 뒤 모두 "다 좋음"을 눌러(아무도 메뉴를 내지 않아) 랜덤 선택이 된 방을 만든다. 첫 번째가 방장이다.
+	 */
+	VotingRoom randomPickRoom(String createBody, int people) throws Exception {
+		TestRoom room = createRoom(createBody);
+		List<Cookie> cookies = new ArrayList<>(List.of(room.host()));
+		for (int i = 1; i < people; i++) {
+			cookies.add(join(room.code()));
+		}
+		nextPhase(room.code(), room.host(), "WAITING").andExpect(status().isOk());
+		for (Cookie cookie : cookies) {
+			allGood(room.code(), cookie).andExpect(status().isOk());
+		}
+		getRoom(room.code(), room.host()).andExpect(jsonPath("$.room.status").value("RANDOM_PICK"));
+		return new VotingRoom(room.code(), cookies);
+	}
+
+	/** 지금 뽑혀서 메뉴를 정해야 하는 사람의 쿠키. 정확히 한 명이어야 한다. */
+	Cookie picker(String code, List<Cookie> people) throws Exception {
+		List<Cookie> pickers = new ArrayList<>();
+		for (Cookie person : people) {
+			if (Boolean.TRUE.equals(read(code, person, "$.me.picking"))) {
+				pickers.add(person);
+			}
+		}
+		assertThat(pickers).as("뽑힌 사람은 정확히 한 명이어야 한다").hasSize(1);
+		return pickers.getFirst();
 	}
 
 	record VotingRoom(String code, List<Cookie> people) {

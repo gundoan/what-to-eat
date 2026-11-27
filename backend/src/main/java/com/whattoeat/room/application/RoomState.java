@@ -22,15 +22,16 @@ import com.whattoeat.room.domain.RoomStatus;
  * @param voteScores 첫 투표의 메뉴별 점수(총점이 높은 순). 투표가 끝난 뒤에만 채운다. 투표 중에 보여주면, 누가 표를 낸 순간
  * 바뀐 점수로 그 사람이 어디에 표를 줬는지 짐작할 수 있어서다
  * @param revoteScores 재투표의 메뉴별 점수. 재투표가 끝난 뒤에만 채운다
+ * @param pickTurn 랜덤 선택에서 지금 몇 번째 뽑기인지. 누가 뽑혔는지는 없다. 랜덤 선택이 아니면 null
  * @param result 결정된 메뉴와 결정 이유. 끝나기 전에는 null
  */
 public record RoomState(String code, RoomStatus status, PhaseDurations phaseDurations, long participantCount,
 		Instant phaseEndsAt, Instant serverTime, List<MenuItem> menus, long doneCount,
 		List<MergeGroupItem> mergeGroups, List<MenuItem> voteCandidates, List<MenuScoreItem> voteScores,
-		List<MenuScoreItem> revoteScores, ResultItem result) {
+		List<MenuScoreItem> revoteScores, Integer pickTurn, ResultItem result) {
 
 	/**
-	 * @param name 결정된 메뉴 이름
+	 * @param name 결정된 메뉴 이름. 랜덤 선택에서 뽑힌 사람이 정한 이름이면 메뉴 목록에 없을 수 있다
 	 * @param reason 어떻게 결정됐는지
 	 */
 	public record ResultItem(String name, ResultReason reason) {

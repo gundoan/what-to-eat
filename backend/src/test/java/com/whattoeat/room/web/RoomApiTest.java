@@ -275,9 +275,9 @@ class RoomApiTest {
 			assertThat(response).containsOnlyKeys("room", "me");
 			assertThat(roomState).containsOnlyKeys("code", "status", "phaseDurations", "participantCount", "phaseEndsAt",
 					"serverTime", "menus", "doneCount", "mergeGroups", "voteCandidates", "voteScores", "revoteScores",
-					"result");
+					"pickTurn", "result");
 			assertThat(me).containsOnlyKeys("host", "proposal", "allGood", "menuId", "mergedInto", "pendingGroupId",
-					"sentGroupId", "requestableMenuIds", "ballot", "done");
+					"sentGroupId", "requestableMenuIds", "ballot", "picking", "done");
 		}
 
 	}

@@ -15,6 +15,9 @@ public enum ResultReason {
 	REVOTE,
 
 	/** 재투표도 동점이거나 아무도 찍지 않아서, 서버가 동점 메뉴 중 무작위로 골랐다. */
-	REVOTE_RANDOM
+	REVOTE_RANDOM,
+
+	/** 랜덤 선택에서 뽑힌 사람이 메뉴 이름을 정했다. 누가 정했는지는 비밀이다. */
+	PICKED
 
 }

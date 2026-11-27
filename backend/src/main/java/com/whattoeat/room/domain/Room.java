@@ -51,7 +51,7 @@ public class Room {
 	/** 지금 단계가 끝나는 시각. 시간 제한이 없는 단계에서는 비어 있다. */
 	private Instant phaseEndsAt;
 
-	/** 결정된 메뉴. 끝나기 전에는 비어 있다. */
+	/** 결정된 메뉴. 끝나기 전이나, 랜덤 선택에서 뽑힌 사람이 이름을 직접 정한 경우에는 비어 있다. */
 	@ManyToOne(fetch = FetchType.LAZY)
 	@JoinColumn(name = "result_menu_id")
 	private Menu resultMenu;
@@ -109,8 +109,7 @@ public class Room {
 			decide(menus.getFirst(), ResultReason.ONLY_MENU, now);
 		}
 		else {
-			// 랜덤 선택의 타이머는 기능 5에서 건다.
-			moveTo(RoomStatus.RANDOM_PICK, now, null);
+			startRandomPick(now);
 		}
 	}
 
@@ -140,7 +139,7 @@ public class Room {
 	public void finishVoting(VoteTally tally, Instant now) {
 		requireStatus(RoomStatus.VOTING);
 		if (tally.hasNoVotes()) {
-			moveTo(RoomStatus.RANDOM_PICK, now, null);
+			startRandomPick(now);
 			return;
 		}
 		List<Menu> leaders = tally.leaders();
@@ -173,6 +172,23 @@ public class Room {
 	}
 
 	/**
+	 * 랜덤 선택에서 뽑힌 사람이 정한 이름으로 결정한다. 메뉴 목록에 없는 이름일 수도 있어서 이름만 남긴다.
+	 */
+	public void decideByPick(MenuName name, Instant now) {
+		requireStatus(RoomStatus.RANDOM_PICK);
+		this.resultMenu = null;
+		this.resultName = name.value();
+		this.resultReason = ResultReason.PICKED;
+		moveTo(RoomStatus.FINISHED, now, null);
+	}
+
+	/** 랜덤 선택에서 다른 사람을 다시 뽑았다. 새로 뽑힌 사람에게 랜덤 선택 시간을 처음부터 준다. */
+	public void restartPickTimer(Instant now) {
+		requireStatus(RoomStatus.RANDOM_PICK);
+		moveTo(RoomStatus.RANDOM_PICK, now, phaseDurations.randomPickSeconds());
+	}
+
+	/**
 	 * 지금(또는 마지막으로 끝난) 투표가 몇 번째 판인지. 투표 중이면 1, 재투표 중이면 2이고,
 	 * 끝난 방은 재투표로 결정됐으면 2, 아니면 1이다.
 	 */
@@ -180,6 +196,11 @@ public class Room {
 		boolean revoted = status == RoomStatus.REVOTING || resultReason == ResultReason.REVOTE
 				|| resultReason == ResultReason.REVOTE_RANDOM;
 		return revoted ? Ballot.REVOTE_ROUND : Ballot.FIRST_ROUND;
+	}
+
+	/** 아무도 메뉴를 내지 않았거나 아무도 투표하지 않았다. 뽑기 차례는 서비스가 만들고, 뽑힌 사람에게 랜덤 선택 시간을 준다. */
+	private void startRandomPick(Instant now) {
+		moveTo(RoomStatus.RANDOM_PICK, now, phaseDurations.randomPickSeconds());
 	}
 
 	/** 메뉴를 결정하고 끝낸다. 끝난 방에는 더 넘어갈 단계가 없다. */
@@ -236,7 +257,7 @@ public class Room {
 		return phaseEndsAt;
 	}
 
-	/** 결정된 메뉴. 끝나기 전이면 null */
+	/** 결정된 메뉴. 끝나기 전이거나 뽑힌 사람이 이름을 직접 정했으면 null */
 	public Menu getResultMenu() {
 		return resultMenu;
 	}

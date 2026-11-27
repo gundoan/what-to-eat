@@ -81,6 +81,8 @@ class RoomTest {
 			assertThat(oneMenu.getResultReason()).isEqualTo(ResultReason.ONLY_MENU);
 			assertThat(oneMenu.getPhaseEndsAt()).isNull();
 			assertThat(noMenu.getStatus()).isEqualTo(RoomStatus.RANDOM_PICK);
+			assertThat(noMenu.getPhaseEndsAt()).as("뽑힌 사람에게 랜덤 선택 시간(기본 1분)을 준다")
+				.isEqualTo(START.plusSeconds(65));
 			assertThat(noMenu.getResultMenu()).isNull();
 		}
 
@@ -151,7 +153,7 @@ class RoomTest {
 		}
 
 		@Test
-		@DisplayName("아무도 표를 내지 않았으면(모두 다 좋음) 랜덤 선택으로 간다")
+		@DisplayName("아무도 표를 내지 않았으면(모두 다 좋음) 랜덤 선택이 되고, 랜덤 선택 시간을 준다")
 		void noVotesGoToRandomPick() {
 			Room room = votingRoom();
 			List<Menu> menus = menus(room, 2);
@@ -160,6 +162,7 @@ class RoomTest {
 					List.of(Ballot.allGood(room, participant(room, 1), Ballot.FIRST_ROUND, START))), START);
 
 			assertThat(room.getStatus()).isEqualTo(RoomStatus.RANDOM_PICK);
+			assertThat(room.getPhaseEndsAt()).isEqualTo(START.plusSeconds(PhaseDurations.DEFAULT_SECONDS));
 		}
 
 	}
@@ -211,6 +214,37 @@ class RoomTest {
 
 	}
 
+	@Nested
+	@DisplayName("랜덤 선택")
+	class RandomPick {
+
+		@Test
+		@DisplayName("다시 뽑으면 새로 뽑힌 사람에게 랜덤 선택 시간을 처음부터 준다")
+		void restartsTimerOnRedraw() {
+			Room room = randomPickRoom(PhaseDurations.of(null, null, null, 90));
+
+			room.restartPickTimer(START.plusSeconds(200));
+
+			assertThat(room.getStatus()).isEqualTo(RoomStatus.RANDOM_PICK);
+			assertThat(room.getPhaseEndsAt()).isEqualTo(START.plusSeconds(290));
+		}
+
+		@Test
+		@DisplayName("뽑힌 사람이 정한 이름으로 결정되고, 메뉴 목록에 없는 이름이어도 된다")
+		void decidesWithPickedName() {
+			Room room = randomPickRoom(PhaseDurations.defaults());
+
+			room.decideByPick(new MenuName("  아무거나 국밥  "), START.plusSeconds(10));
+
+			assertThat(room.getStatus()).isEqualTo(RoomStatus.FINISHED);
+			assertThat(room.getResultName()).isEqualTo("아무거나 국밥");
+			assertThat(room.getResultMenu()).isNull();
+			assertThat(room.getResultReason()).isEqualTo(ResultReason.PICKED);
+			assertThat(room.getPhaseEndsAt()).isNull();
+		}
+
+	}
+
 	@Test
 	@DisplayName("단계 순서를 건너뛸 수 없다")
 	void cannotSkipPhases() {
@@ -249,6 +283,12 @@ class RoomTest {
 		List<Menu> menus = menus(room, 2);
 		room.finishVoting(VoteTally.count(menus, List.of(ballot(room, participant(room, 1), menus.get(0), 1),
 				ballot(room, participant(room, 2), menus.get(1), 1))), START);
+		return room;
+	}
+
+	private static Room randomPickRoom(PhaseDurations durations) {
+		Room room = proposingRoom(durations);
+		room.finishProposal(List.of(), START.plusSeconds(5));
 		return room;
 	}
 

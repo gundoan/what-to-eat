@@ -47,7 +47,7 @@ class ProposalConcurrencyTest {
 		for (int i = 1; i < Room.MAX_PARTICIPANTS; i++) {
 			tokens.add(roomService.join(created.code(), null).newToken());
 		}
-		phaseService.advanceByHost(created.code(), created.token(), RoomStatus.WAITING);
+		phaseService.advanceByHost(created.code(), created.token(), RoomStatus.WAITING, null);
 
 		List<Callable<Void>> proposals = new ArrayList<>();
 		for (int i = 0; i < tokens.size(); i++) {
@@ -75,7 +75,7 @@ class ProposalConcurrencyTest {
 
 		Callable<Void> press = () -> {
 			try {
-				phaseService.advanceByHost(created.code(), created.token(), RoomStatus.WAITING);
+				phaseService.advanceByHost(created.code(), created.token(), RoomStatus.WAITING, null);
 				succeeded.incrementAndGet();
 			}
 			catch (BusinessException e) {
