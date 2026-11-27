@@ -38,9 +38,9 @@
 - DB: MySQL 9.7 (LTS). 테이블은 Flyway SQL 파일(`backend/src/main/resources/db/migration`)로만 만들고 바꾼다. JPA는 테이블을 만들지 않고 엔티티와 맞는지 검사만 한다(`ddl-auto: validate`).
 - 테스트: JUnit 6 (Spring Boot 4의 기본값, JUnit 5의 후속 버전), Testcontainers (테스트할 때 실제 MySQL을 띄운다)
 - 프론트: React + TypeScript (Vite). 모바일 웹 우선. **지금은 기능을 확인할 수 있을 정도로만 간단하게 만든다.** 디자인은 기능이 다 잘 돌아간 다음에 따로 개선할 예정이니, 나중에 화면을 꾸미기 쉽게 화면 구성과 기능 로직을 나눠서 만든다. 처음에는 빌드한 프론트를 Spring Boot에서 같이 서빙해서 배포를 단순하게 한다. 단, 코드는 프론트와 백엔드 폴더를 처음부터 나눠두고, 나중에 따로 배포하도록 바꾸기 쉽게 만든다.
-- 배포: AWS EC2 서버 한 대에 Docker Compose로 앱과 MySQL을 같이 띄운다. 가장 작은 사양으로 시작하고, 메모리가 부족하면 그때 사양을 올리거나 DB를 분리한다. 첫 배포는 내가 과정을 따라가면서 직접 해본다.
-- 로컬 개발: MySQL은 Docker Compose(`compose.yaml`)로 띄운다. 비밀 정보는 레포 루트의 `.env`(깃 제외)에 두고, 견본은 `.env.example`에 둔다.
-- CI: GitHub Actions. PR마다 백엔드 테스트와 프론트 린트·빌드를 자동으로 돌린다.
+- 배포: AWS EC2 서버 한 대에 Docker Compose로 앱과 MySQL을 같이 띄운다. 가장 작은 사양으로 시작하고, 메모리가 부족하면 그때 사양을 올리거나 DB를 분리한다. 첫 배포는 내가 과정을 따라가면서 직접 해본다. 배포 전에는 `docs/manual-test.md` 체크리스트로 화면을 직접 확인한다.
+- 로컬 개발: MySQL은 Docker Compose(`compose.yaml`)로 띄운다. 비밀 정보는 레포 루트의 `.env`(깃 제외)에 두고, 견본은 `.env.example`에 둔다. 여러 명으로 테스트할 때는 개발 서버의 `dev-board.html`(개발용 여러 명 테스트 화면)을 쓴다. 칸마다 쿠키 경로를 나눠 다른 참여자가 되고, 배포용 빌드에는 들어가지 않는다.
+- CI: GitHub Actions. PR마다 백엔드 테스트와 프론트 린트·빌드를 자동으로 돌리고, 배포용 빌드에 개발용 테스트 화면이 섞이지 않았는지 검사한다.
 - AI: Claude Haiku 5.5. 비슷한 메뉴 묶기(기능 6)에만 쓴다. 쓸 때마다 비용이 드는 외부 API라 MVP를 다 만든 뒤에 붙이고, 그전까지는 AI 없이 이름이 같은 메뉴만 묶는다. API 키는 `.env`에만 둔다.
 
 ## 기능 목록
