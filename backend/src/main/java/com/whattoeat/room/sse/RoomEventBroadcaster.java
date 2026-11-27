@@ -39,6 +39,9 @@ public class RoomEventBroadcaster {
 	/** 연결을 이 시간 뒤에 서버가 닫는다. 브라우저(EventSource)는 자동으로 다시 연결한다. */
 	private static final long CONNECTION_TIMEOUT_MILLIS = Duration.ofMinutes(30).toMillis();
 
+	/** 하트비트 간격(초). 끊긴 연결을 알아채는 시간도 이것에 달려 있다. */
+	private static final long HEARTBEAT_SECONDS = 10;
+
 	private final RoomChannels channels;
 
 	private final RoomStateReader roomStateReader;
@@ -101,11 +104,12 @@ public class RoomEventBroadcaster {
 	}
 
 	/**
-	 * 오래 조용한 연결은 중간의 프록시가 끊을 수 있어서, 25초마다 내용 없는 주석 줄을 보낸다.
+	 * 오래 조용한 연결은 중간의 프록시가 끊을 수 있어서, 10초마다 내용 없는 주석 줄을 보낸다.
 	 * 서버는 끊긴 연결에 무언가를 보내 봐야 끊긴 것을 알 수 있어서, 끊긴 연결도 이때 정리된다.
 	 * 정리해서 "지금 접속 중"이 줄었으면 남은 사람들에게 바뀐 인원을 알린다.
+	 * 간격이 짧을수록 탭을 닫은 사람이 "지금 접속 중"에서 빨리 빠진다. 보내는 양은 연결마다 10초에 한 줄이라 아주 적다.
 	 */
-	@Scheduled(fixedRate = 25, timeUnit = TimeUnit.SECONDS)
+	@Scheduled(fixedRate = HEARTBEAT_SECONDS, timeUnit = TimeUnit.SECONDS)
 	public void sendHeartbeat() {
 		channels.forEach((roomCode, channel) -> {
 			synchronized (channel) {
