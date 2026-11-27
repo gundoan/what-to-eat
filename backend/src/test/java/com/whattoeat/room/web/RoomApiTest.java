@@ -2,6 +2,7 @@ package com.whattoeat.room.web;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.hamcrest.Matchers.nullValue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
@@ -73,6 +74,25 @@ class RoomApiTest {
 				.andExpect(jsonPath("$.room.phaseDurations.mergeSeconds").value(600))
 				.andExpect(jsonPath("$.room.phaseDurations.voteSeconds").value(90))
 				.andExpect(jsonPath("$.room.phaseDurations.randomPickSeconds").value(120));
+		}
+
+		@Test
+		@DisplayName("0초는 \"제한 없음\"으로 저장되고, 시작해도 끝나는 시각이 없다")
+		void savesNoLimitAndStartsWithoutDeadline() throws Exception {
+			CreatedRoom room = createRoom("""
+					{"proposalSeconds": 0, "mergeSeconds": 0, "voteSeconds": 0, "randomPickSeconds": 0}
+					""");
+
+			mockMvc.perform(post("/api/rooms/" + room.code() + "/next-phase").cookie(room.cookie())
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("{\"from\": \"WAITING\"}"))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.room.status").value("PROPOSING"))
+				.andExpect(jsonPath("$.room.phaseDurations.proposalSeconds").value(0))
+				.andExpect(jsonPath("$.room.phaseDurations.randomPickSeconds").value(0))
+				.andExpect(jsonPath("$.room.phaseEndsAt", nullValue()))
+				// API에는 초만 보낸다. 서버 코드의 도우미(proposalLimit 등)는 나가지 않는다.
+				.andExpect(jsonPath("$.room.phaseDurations.proposalLimit").doesNotExist());
 		}
 
 		@ParameterizedTest(name = "{0}초는 거절한다")

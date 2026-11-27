@@ -5,7 +5,7 @@ import org.springframework.http.HttpStatus;
 public enum ErrorCode {
 
 	INVALID_REQUEST(HttpStatus.BAD_REQUEST, "요청 형식이 올바르지 않습니다."),
-	INVALID_PHASE_DURATION(HttpStatus.BAD_REQUEST, "단계 시간은 30초에서 10분 사이, 30초 단위로 정해야 합니다."),
+	INVALID_PHASE_DURATION(HttpStatus.BAD_REQUEST, "단계 시간은 30초에서 10분 사이(30초 단위)나 제한 없음(0)으로 정해야 합니다."),
 	INVALID_MENU_NAME(HttpStatus.BAD_REQUEST, "메뉴 이름은 1자에서 30자 사이로 써 주세요."),
 	NOT_PARTICIPANT(HttpStatus.FORBIDDEN, "이 방의 참여자가 아닙니다. 링크로 먼저 참여해 주세요."),
 	NOT_HOST(HttpStatus.FORBIDDEN, "방장만 할 수 있습니다."),

@@ -48,6 +48,34 @@ class RoomTest {
 		assertThat(room.isPhaseExpired(START.plusSeconds(60 * 60 * 24))).isFalse();
 	}
 
+	@Test
+	@DisplayName("방장이 \"제한 없음\"으로 정한 단계는 끝나는 시각이 없고, 하루가 지나도 시간이 다 되지 않는다")
+	void noLimitPhaseHasNoDeadline() {
+		int none = PhaseDurations.NO_LIMIT;
+		Room room = mergingRoom(PhaseDurations.of(none, none, none, none));
+
+		assertThat(room.getStatus()).isEqualTo(RoomStatus.MERGING);
+		assertThat(room.getPhaseEndsAt()).isNull();
+		assertThat(room.isPhaseExpired(START.plusSeconds(60 * 60 * 24))).isFalse();
+
+		room.finishMerging(menus(room, 2), START.plusSeconds(10));
+
+		assertThat(room.getStatus()).isEqualTo(RoomStatus.VOTING);
+		assertThat(room.getPhaseEndsAt()).isNull();
+	}
+
+	@Test
+	@DisplayName("단계마다 따로 정할 수 있어서, \"제한 없음\"이 아닌 단계는 정한 시간대로 끝난다")
+	void mixesNoLimitAndTimedPhases() {
+		Room room = proposingRoom(PhaseDurations.of(PhaseDurations.NO_LIMIT, 90, null, null));
+
+		assertThat(room.getPhaseEndsAt()).as("제안은 제한 없음").isNull();
+
+		room.finishProposal(menus(room, 2), START.plusSeconds(5));
+
+		assertThat(room.getPhaseEndsAt()).as("합치기는 90초").isEqualTo(START.plusSeconds(95));
+	}
+
 	@Nested
 	@DisplayName("제안이 끝날 때")
 	class FinishProposal {
@@ -227,6 +255,19 @@ class RoomTest {
 
 			assertThat(room.getStatus()).isEqualTo(RoomStatus.RANDOM_PICK);
 			assertThat(room.getPhaseEndsAt()).isEqualTo(START.plusSeconds(290));
+		}
+
+		@Test
+		@DisplayName("랜덤 선택이 \"제한 없음\"이면 뽑힌 사람에게 시간 제한이 없고, 다시 뽑아도 마찬가지다")
+		void noLimitPickHasNoDeadline() {
+			Room room = randomPickRoom(PhaseDurations.of(null, null, null, PhaseDurations.NO_LIMIT));
+
+			assertThat(room.getPhaseEndsAt()).isNull();
+
+			room.restartPickTimer(START.plusSeconds(200));
+
+			assertThat(room.getStatus()).isEqualTo(RoomStatus.RANDOM_PICK);
+			assertThat(room.getPhaseEndsAt()).isNull();
 		}
 
 		@Test

@@ -32,9 +32,21 @@ class PhaseDurationsTest {
 		assertThat(durations.proposalSeconds()).isEqualTo(seconds);
 	}
 
+	@Test
+	@DisplayName("0초는 \"제한 없음\"이고, 그 단계의 시간은 없다(null)")
+	void zeroMeansNoLimit() {
+		PhaseDurations durations = PhaseDurations.of(PhaseDurations.NO_LIMIT, 90, 0, 0);
+
+		assertThat(durations.proposalSeconds()).isZero();
+		assertThat(durations.proposalLimit()).isNull();
+		assertThat(durations.mergeLimit()).as("다른 단계는 정한 대로").isEqualTo(90);
+		assertThat(durations.voteLimit()).isNull();
+		assertThat(durations.randomPickLimit()).isNull();
+	}
+
 	@ParameterizedTest(name = "{0}초는 거절한다")
-	@ValueSource(ints = { 0, 29, 45, 601, 630, -30 })
-	@DisplayName("30초보다 짧거나, 10분보다 길거나, 30초 단위가 아니면 거절한다")
+	@ValueSource(ints = { 15, 29, 45, 601, 630, -30 })
+	@DisplayName("0초(제한 없음)가 아니면서 30초보다 짧거나, 10분보다 길거나, 30초 단위가 아니면 거절한다")
 	void rejectsInvalidSeconds(int seconds) {
 		assertThatThrownBy(() -> PhaseDurations.of(seconds, null, null, null))
 			.isInstanceOf(BusinessException.class)

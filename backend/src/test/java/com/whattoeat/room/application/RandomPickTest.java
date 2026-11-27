@@ -111,6 +111,31 @@ class RandomPickTest {
 	}
 
 	@Test
+	@DisplayName("랜덤 선택이 \"제한 없음\"이면 자동으로 다시 뽑지 않고, 방장이 다른 사람 뽑기를 누를 때만 다시 뽑는다")
+	void noLimitPickRedrawsOnlyByHost() {
+		PickRoom room = randomPickRoom(2, PhaseDurations.of(null, null, null, PhaseDurations.NO_LIMIT));
+		String first = picker(room);
+		assertThat(room(room).getPhaseEndsAt()).isNull();
+
+		phaseService.advanceExpiredPhases(room(room).getPhaseStartedAt().plus(Duration.ofDays(1)));
+
+		assertThat(state(room).pickTurn()).as("하루가 지나도 다시 뽑지 않는다").isEqualTo(1);
+		assertThat(picker(room)).isEqualTo(first);
+
+		phaseService.advanceByHost(room.code(), room.host(), RoomStatus.RANDOM_PICK, 1);
+
+		String second = picker(room);
+		assertThat(state(room).pickTurn()).isEqualTo(2);
+		assertThat(second).isNotEqualTo(first);
+		assertThat(room(room).getPhaseEndsAt()).as("다시 뽑아도 시간 제한은 없다").isNull();
+
+		pickService.decide(room.code(), second, "순댓국");
+
+		assertThat(state(room).status()).isEqualTo(RoomStatus.FINISHED);
+		assertThat(state(room).result().name()).isEqualTo("순댓국");
+	}
+
+	@Test
 	@DisplayName("뽑힌 사람이 정하는 순간 시간이 다 돼도, 정해지거나 다시 뽑히거나 둘 중 하나만 일어난다 (10번 반복)")
 	void decideAndTimeoutNeverBothHappen() throws Exception {
 		for (int trial = 0; trial < 10; trial++) {
@@ -188,7 +213,11 @@ class RandomPickTest {
 
 	/** people명이 들어와 모두 "다 좋음"을 눌러 랜덤 선택이 된 방. 첫 번째 토큰이 방장이다. */
 	private PickRoom randomPickRoom(int people) {
-		CreatedRoom created = roomService.create(PhaseDurations.defaults());
+		return randomPickRoom(people, PhaseDurations.defaults());
+	}
+
+	private PickRoom randomPickRoom(int people, PhaseDurations durations) {
+		CreatedRoom created = roomService.create(durations);
 		List<String> tokens = new ArrayList<>(List.of(created.token()));
 		for (int i = 1; i < people; i++) {
 			tokens.add(roomService.join(created.code(), null).newToken());
