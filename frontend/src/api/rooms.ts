@@ -1,8 +1,12 @@
 import { request } from './client'
+import { panelBase } from '../devPanel'
 import type { PhaseDurations, RoomStatus, RoomView, Vote } from '../types/room'
 
+/** 여러 명 테스트 화면의 칸 안이면 /p/N/api(개발 중에만), 아니면 /api */
+const API_BASE = `${panelBase}/api`
+
 export function createRoom(durations: PhaseDurations): Promise<{ code: string }> {
-  return request('/api/rooms', { method: 'POST', body: JSON.stringify(durations) })
+  return request(`${API_BASE}/rooms`, { method: 'POST', body: JSON.stringify(durations) })
 }
 
 // 같은 방에 참여 요청이 겹치면 하나로 합친다.
@@ -103,5 +107,5 @@ export function subscribeRoom(code: string, handlers: RoomEventHandlers): () => 
 }
 
 function roomPath(code: string): string {
-  return `/api/rooms/${encodeURIComponent(code)}`
+  return `${API_BASE}/rooms/${encodeURIComponent(code)}`
 }
