@@ -55,7 +55,7 @@ class VoteTimeoutTest {
 
 		RoomState state = state(room);
 		assertThat(state.status()).isEqualTo(RoomStatus.FINISHED);
-		assertThat(state.resultMenu().name()).isEqualTo("라면");
+		assertThat(state.result().name()).isEqualTo("라면");
 	}
 
 	@Test
@@ -75,7 +75,7 @@ class VoteTimeoutTest {
 		for (int i = 1; i < menus.length; i++) {
 			tokens.add(roomService.join(created.code(), null).newToken());
 		}
-		phaseService.advanceByHost(created.code(), created.token(), RoomStatus.WAITING);
+		phaseService.advanceByHost(created.code(), created.token(), RoomStatus.WAITING, null);
 		for (int i = 0; i < menus.length; i++) {
 			proposalService.propose(created.code(), tokens.get(i), menus[i]);
 		}

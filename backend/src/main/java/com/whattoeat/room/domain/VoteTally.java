@@ -54,6 +54,20 @@ public final class VoteTally {
 		return new VoteTally(scores, voteCount);
 	}
 
+	/**
+	 * 몇 번째 판에 표를 줄 수 있는 메뉴들. 첫 투표는 남은 메뉴 전부이고, 재투표는 첫 투표에서 동점으로 1등이었던 메뉴들이다.
+	 * 첫 투표의 표는 바뀌지 않으므로, 재투표 후보는 따로 저장하지 않고 필요할 때마다 다시 계산해도 항상 같다.
+	 *
+	 * @param remainingMenus 다른 메뉴에 합쳐지지 않고 남은 메뉴들(가나다순)
+	 * @param firstRoundBallots 첫 투표의 투표지들
+	 */
+	public static List<Menu> candidates(int round, List<Menu> remainingMenus, List<Ballot> firstRoundBallots) {
+		if (round == Ballot.FIRST_ROUND) {
+			return remainingMenus;
+		}
+		return count(remainingMenus, firstRoundBallots).leaders();
+	}
+
 	/** 아무도 표를 내지 않았는지(모두 "다 좋음"을 눌렀거나 아무도 투표하지 않음). 이때는 랜덤 선택으로 간다. */
 	public boolean hasNoVotes() {
 		return voteCount == 0;

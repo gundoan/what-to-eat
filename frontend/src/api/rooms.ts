@@ -25,9 +25,17 @@ export function getRoom(code: string): Promise<RoomView> {
   return request(roomPath(code))
 }
 
-/** 방장의 "시작"과 "다음 단계로". from에는 화면에 보이던 단계를 보내서, 두 번 눌러도 한 단계만 넘어가게 한다. */
-export function nextPhase(code: string, from: RoomStatus): Promise<RoomView> {
-  return request(`${roomPath(code)}/next-phase`, { method: 'POST', body: JSON.stringify({ from }) })
+/**
+ * 방장의 "시작"과 "다음 단계로"(랜덤 선택에서는 "다른 사람 뽑기").
+ * from에는 화면에 보이던 단계를 보내서, 두 번 눌러도 한 단계만 넘어가게 한다.
+ * 랜덤 선택은 다시 뽑아도 단계가 그대로라서, 화면에 보이던 뽑기 차례 번호(pickTurn)도 함께 보낸다.
+ */
+export function nextPhase(code: string, from: RoomStatus, pickTurn: number | null): Promise<RoomView> {
+  // pickTurn이 null이면(랜덤 선택이 아니면) undefined로 바꿔서 본문에서 아예 뺀다.
+  return request(`${roomPath(code)}/next-phase`, {
+    method: 'POST',
+    body: JSON.stringify({ from, pickTurn: pickTurn ?? undefined }),
+  })
 }
 
 export function propose(code: string, menuName: string): Promise<RoomView> {
@@ -68,6 +76,11 @@ export function voteAllGood(code: string): Promise<RoomView> {
 /** "합치기 끝냄". 답하지 않은 질문은 "합치지 않기"로 처리된다. */
 export function finishMerge(code: string): Promise<RoomView> {
   return request(`${roomPath(code)}/me/merge-done`, { method: 'POST' })
+}
+
+/** 랜덤 선택에서 뽑힌 사람이 메뉴를 정한다. 메뉴 목록에 없는 이름이어도 된다(1~30자). 정하면 바로 결정된다. */
+export function decidePick(code: string, menuName: string): Promise<RoomView> {
+  return request(`${roomPath(code)}/me/pick`, { method: 'POST', body: JSON.stringify({ menuName }) })
 }
 
 type RoomEventHandlers = {

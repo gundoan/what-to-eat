@@ -130,7 +130,7 @@ class PhaseTimeoutTest {
 		for (int i = 0; i < guestCount; i++) {
 			tokens.add(roomService.join(created.code(), null).newToken());
 		}
-		phaseService.advanceByHost(created.code(), created.token(), RoomStatus.WAITING);
+		phaseService.advanceByHost(created.code(), created.token(), RoomStatus.WAITING, null);
 		return new StartedRoom(created.code(), tokens);
 	}
 

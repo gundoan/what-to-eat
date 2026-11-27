@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.random.RandomGenerator;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -76,8 +77,12 @@ class RoomTest {
 
 			assertThat(oneMenu.getStatus()).isEqualTo(RoomStatus.FINISHED);
 			assertThat(oneMenu.getResultMenu()).isSameAs(only.getFirst());
+			assertThat(oneMenu.getResultName()).isEqualTo("메뉴1");
+			assertThat(oneMenu.getResultReason()).isEqualTo(ResultReason.ONLY_MENU);
 			assertThat(oneMenu.getPhaseEndsAt()).isNull();
 			assertThat(noMenu.getStatus()).isEqualTo(RoomStatus.RANDOM_PICK);
+			assertThat(noMenu.getPhaseEndsAt()).as("뽑힌 사람에게 랜덤 선택 시간(기본 1분)을 준다")
+				.isEqualTo(START.plusSeconds(65));
 			assertThat(noMenu.getResultMenu()).isNull();
 		}
 
@@ -128,10 +133,12 @@ class RoomTest {
 
 			assertThat(room.getStatus()).isEqualTo(RoomStatus.FINISHED);
 			assertThat(room.getResultMenu()).isSameAs(menus.get(1));
+			assertThat(room.getResultReason()).isEqualTo(ResultReason.VOTE);
+			assertThat(room.voteRound()).isEqualTo(Ballot.FIRST_ROUND);
 		}
 
 		@Test
-		@DisplayName("1등이 둘 이상(동점)이면 재투표 단계로 간다")
+		@DisplayName("1등이 둘 이상(동점)이면 재투표 단계가 되고, 투표와 같은 시간 뒤에 끝난다")
 		void tieGoesToRevote() {
 			Room room = votingRoom();
 			List<Menu> menus = menus(room, 2);
@@ -140,11 +147,13 @@ class RoomTest {
 					ballot(room, participant(room, 2), menus.get(1), 1))), START);
 
 			assertThat(room.getStatus()).isEqualTo(RoomStatus.REVOTING);
+			assertThat(room.getPhaseEndsAt()).isEqualTo(START.plusSeconds(PhaseDurations.DEFAULT_SECONDS));
+			assertThat(room.voteRound()).isEqualTo(Ballot.REVOTE_ROUND);
 			assertThat(room.getResultMenu()).isNull();
 		}
 
 		@Test
-		@DisplayName("아무도 표를 내지 않았으면(모두 다 좋음) 랜덤 선택으로 간다")
+		@DisplayName("아무도 표를 내지 않았으면(모두 다 좋음) 랜덤 선택이 되고, 랜덤 선택 시간을 준다")
 		void noVotesGoToRandomPick() {
 			Room room = votingRoom();
 			List<Menu> menus = menus(room, 2);
@@ -153,6 +162,97 @@ class RoomTest {
 					List.of(Ballot.allGood(room, participant(room, 1), Ballot.FIRST_ROUND, START))), START);
 
 			assertThat(room.getStatus()).isEqualTo(RoomStatus.RANDOM_PICK);
+			assertThat(room.getPhaseEndsAt()).isEqualTo(START.plusSeconds(PhaseDurations.DEFAULT_SECONDS));
+		}
+
+	}
+
+	@Nested
+	@DisplayName("재투표가 끝날 때")
+	class FinishRevote {
+
+		@Test
+		@DisplayName("1등이 하나면 그 메뉴로 결정된다")
+		void decidesUniqueLeader() {
+			Room room = revotingRoom();
+			List<Menu> candidates = menus(room, 2);
+
+			room.finishRevote(VoteTally.count(candidates, List.of(revoteBallot(room, 1, candidates.get(0), 1))),
+					candidates, alwaysPick(1), START);
+
+			assertThat(room.getStatus()).isEqualTo(RoomStatus.FINISHED);
+			assertThat(room.getResultMenu()).isSameAs(candidates.get(0));
+			assertThat(room.getResultReason()).isEqualTo(ResultReason.REVOTE);
+			assertThat(room.voteRound()).as("끝난 뒤에도 재투표로 정해졌다는 것을 안다").isEqualTo(Ballot.REVOTE_ROUND);
+		}
+
+		@Test
+		@DisplayName("또 동점이면 재투표의 1등끼리 중에서 무작위로 결정되고, 재투표에서 밀린 메뉴는 뽑히지 않는다")
+		void tieAgainPicksAmongRevoteLeaders() {
+			Room room = revotingRoom();
+			List<Menu> candidates = menus(room, 3);
+			VoteTally tally = VoteTally.count(candidates, List.of(revoteBallot(room, 1, candidates.get(0), 1),
+					revoteBallot(room, 2, candidates.get(2), 1), revoteBallot(room, 3, candidates.get(1), -1)));
+
+			room.finishRevote(tally, candidates, alwaysPick(1), START); // 재투표 1등 [0번, 2번] 중 두 번째
+
+			assertThat(room.getResultMenu()).isSameAs(candidates.get(2));
+			assertThat(room.getResultReason()).isEqualTo(ResultReason.REVOTE_RANDOM);
+		}
+
+		@Test
+		@DisplayName("재투표에서 아무도 표를 내지 않았으면 재투표 후보 전체 중에서 무작위로 결정된다")
+		void noVotesPicksAmongAllCandidates() {
+			Room room = revotingRoom();
+			List<Menu> candidates = menus(room, 3);
+
+			room.finishRevote(VoteTally.count(candidates, List.of()), candidates, alwaysPick(2), START);
+
+			assertThat(room.getResultMenu()).isSameAs(candidates.get(2));
+			assertThat(room.getResultReason()).isEqualTo(ResultReason.REVOTE_RANDOM);
+		}
+
+	}
+
+	@Nested
+	@DisplayName("랜덤 선택")
+	class RandomPick {
+
+		@Test
+		@DisplayName("다시 뽑으면 새로 뽑힌 사람에게 랜덤 선택 시간을 처음부터 준다")
+		void restartsTimerOnRedraw() {
+			Room room = randomPickRoom(PhaseDurations.of(null, null, null, 90));
+
+			room.restartPickTimer(START.plusSeconds(200));
+
+			assertThat(room.getStatus()).isEqualTo(RoomStatus.RANDOM_PICK);
+			assertThat(room.getPhaseEndsAt()).isEqualTo(START.plusSeconds(290));
+		}
+
+		@Test
+		@DisplayName("모두 한 번씩 뽑혀 자동 다시 뽑기를 멈추면 시간 제한이 없어지고, 단계는 그대로다")
+		void stopsTimerAfterEveryoneWasPicked() {
+			Room room = randomPickRoom(PhaseDurations.defaults());
+
+			room.stopPickTimer();
+
+			assertThat(room.getStatus()).isEqualTo(RoomStatus.RANDOM_PICK);
+			assertThat(room.getPhaseEndsAt()).isNull();
+			assertThat(room.isPhaseExpired(START.plusSeconds(100_000))).isFalse();
+		}
+
+		@Test
+		@DisplayName("뽑힌 사람이 정한 이름으로 결정되고, 메뉴 목록에 없는 이름이어도 된다")
+		void decidesWithPickedName() {
+			Room room = randomPickRoom(PhaseDurations.defaults());
+
+			room.decideByPick(new MenuName("  아무거나 국밥  "), START.plusSeconds(10));
+
+			assertThat(room.getStatus()).isEqualTo(RoomStatus.FINISHED);
+			assertThat(room.getResultName()).isEqualTo("아무거나 국밥");
+			assertThat(room.getResultMenu()).isNull();
+			assertThat(room.getResultReason()).isEqualTo(ResultReason.PICKED);
+			assertThat(room.getPhaseEndsAt()).isNull();
 		}
 
 	}
@@ -188,6 +288,42 @@ class RoomTest {
 		Room room = mergingRoom(PhaseDurations.defaults());
 		room.finishMerging(menus(room, 2), START.plusSeconds(10));
 		return room;
+	}
+
+	private static Room revotingRoom() {
+		Room room = votingRoom();
+		List<Menu> menus = menus(room, 2);
+		room.finishVoting(VoteTally.count(menus, List.of(ballot(room, participant(room, 1), menus.get(0), 1),
+				ballot(room, participant(room, 2), menus.get(1), 1))), START);
+		return room;
+	}
+
+	private static Room randomPickRoom(PhaseDurations durations) {
+		Room room = proposingRoom(durations);
+		room.finishProposal(List.of(), START.plusSeconds(5));
+		return room;
+	}
+
+	private static Ballot revoteBallot(Room room, long voterId, Menu menu, int point) {
+		return Ballot.of(room, participant(room, voterId), Ballot.REVOTE_ROUND, List.of(new VoteChoice(menu, point)),
+				START);
+	}
+
+	/** 항상 index번째를 고르는 난수. 무작위 결과를 정해 두고 나머지 동작을 확인하려고 쓴다. */
+	private static RandomGenerator alwaysPick(int index) {
+		return new RandomGenerator() {
+
+			@Override
+			public long nextLong() {
+				return index;
+			}
+
+			@Override
+			public int nextInt(int bound) {
+				return index;
+			}
+
+		};
 	}
 
 	/** 번호가 붙은 메뉴 count개. DB 없이 테스트하므로 DB가 붙여 주는 번호를 직접 넣는다. */
