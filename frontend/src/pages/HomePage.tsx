@@ -2,7 +2,7 @@ import { DurationSelect } from '../components/DurationSelect'
 import { useCreateRoom } from '../hooks/useCreateRoom'
 
 export function HomePage() {
-  const { durations, setDuration, submit, submitting, error } = useCreateRoom()
+  const { durations, setDuration, submit, submitting, error, canSubmit } = useCreateRoom()
 
   return (
     <main>
@@ -38,7 +38,7 @@ export function HomePage() {
         />
 
         {error && <p role="alert">{error}</p>}
-        <button type="submit" disabled={submitting}>
+        <button type="submit" disabled={submitting || !canSubmit}>
           {submitting ? '만드는 중...' : '방 만들기'}
         </button>
       </form>
