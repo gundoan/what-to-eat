@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   allGood,
   answerMerge,
@@ -58,6 +58,10 @@ export type RoomActions = {
 export function useRoom(code: string) {
   const [screen, setScreen] = useState<RoomScreen>({ phase: 'loading' })
   const [actionError, setActionError] = useState<string | null>(null)
+  // 답이 오기 전에 같은 버튼을 또 누르면(빨리 두 번 누르기) 두 번째는 보내지 않는다. 확인창이 없어서 두 번 누르기 쉽고,
+  // 그러면 두 번째 요청이 "이미 요청했어요" 같은 이유로 거절되어 오류처럼 보인다.
+  // 다른 버튼은 막지 않는다. 합치기 질문에 답하고 바로 "합치기 끝냄"을 누르는 것처럼, 이어서 누르는 것은 정상이다.
+  const sending = useRef(new Set<keyof RoomActions>())
 
   useEffect(() => {
     let closed = false
@@ -85,27 +89,34 @@ export function useRoom(code: string) {
     }
   }, [code])
 
-  async function run(action: () => Promise<RoomView>) {
+  /** 행동 하나를 서버에 보낸다. 같은 행동(name)의 답을 기다리는 중이면 보내지 않는다. */
+  async function run(name: keyof RoomActions, action: () => Promise<RoomView>) {
+    if (sending.current.has(name)) return
+    sending.current.add(name)
     setActionError(null)
     try {
       setScreen(withView(await action()))
     } catch (e) {
       setActionError(e instanceof ApiError ? e.message : '요청을 처리하지 못했어요. 잠시 뒤 다시 시도해 주세요.')
+    } finally {
+      sending.current.delete(name)
     }
   }
 
   const actions: RoomActions = {
     nextPhase: () => {
-      if (screen.phase === 'ready') void run(() => nextPhase(code, screen.room.status, screen.room.pickTurn))
+      if (screen.phase === 'ready') {
+        void run('nextPhase', () => nextPhase(code, screen.room.status, screen.room.pickTurn))
+      }
     },
-    propose: (menuName) => void run(() => propose(code, menuName)),
-    allGood: () => void run(() => allGood(code)),
-    requestMerge: (targetMenuId) => void run(() => requestMerge(code, targetMenuId)),
-    answerMerge: (groupId, agree) => void run(() => answerMerge(code, groupId, agree)),
-    finishMerge: () => void run(() => finishMerge(code)),
-    submitVotes: (votes) => void run(() => submitVotes(code, votes)),
-    voteAllGood: () => void run(() => voteAllGood(code)),
-    decidePick: (menuName) => void run(() => decidePick(code, menuName)),
+    propose: (menuName) => void run('propose', () => propose(code, menuName)),
+    allGood: () => void run('allGood', () => allGood(code)),
+    requestMerge: (targetMenuId) => void run('requestMerge', () => requestMerge(code, targetMenuId)),
+    answerMerge: (groupId, agree) => void run('answerMerge', () => answerMerge(code, groupId, agree)),
+    finishMerge: () => void run('finishMerge', () => finishMerge(code)),
+    submitVotes: (votes) => void run('submitVotes', () => submitVotes(code, votes)),
+    voteAllGood: () => void run('voteAllGood', () => voteAllGood(code)),
+    decidePick: (menuName) => void run('decidePick', () => decidePick(code, menuName)),
   }
 
   return { screen, actions, actionError }
