@@ -29,7 +29,8 @@ public enum ErrorCode {
 	NOT_VOTING_PHASE(HttpStatus.CONFLICT, "지금은 투표할 수 있는 단계가 아닙니다."),
 	INVALID_BALLOT(HttpStatus.BAD_REQUEST, "표는 1~2개, 한 메뉴에 1표씩, +1 또는 -1로 낼 수 있습니다. 투표하지 않으려면 '다 좋음'을 눌러 주세요."),
 	ALREADY_VOTED(HttpStatus.CONFLICT, "이미 투표했습니다. 낸 표는 바꿀 수 없습니다."),
-	VOTING_ENDED(HttpStatus.CONFLICT, "투표가 끝난 방이라 새로 들어올 수 없습니다.");
+	VOTING_ENDED(HttpStatus.CONFLICT, "투표가 끝난 방이라 새로 들어올 수 없습니다."),
+	NOT_A_CANDIDATE(HttpStatus.BAD_REQUEST, "이번 투표의 후보가 아닌 메뉴입니다. 재투표는 동점이었던 메뉴에만 할 수 있습니다.");
 
 	private final HttpStatus status;
 	private final String message;

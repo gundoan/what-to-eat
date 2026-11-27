@@ -273,7 +273,7 @@ class VoteApiTest {
 		}
 
 		@Test
-		@DisplayName("1등이 동점이면 재투표 단계로 가고, 점수가 공개된다 (재투표는 기능 5)")
+		@DisplayName("1등이 동점이면 재투표 단계로 가고, 첫 투표 점수가 공개된다 (재투표 자체는 RevoteApiTest)")
 		void tieGoesToRevote() throws Exception {
 			VotingRoom room = api.votingRoom(null, "김밥", "라면", "짜장면");
 
