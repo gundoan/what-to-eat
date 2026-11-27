@@ -4,6 +4,7 @@ import static com.whattoeat.room.application.Concurrently.runAllAtOnce;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -27,7 +28,7 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 /**
- * 랜덤 선택에서 시간 초과로 다시 뽑기, 그리고 여러 일이 동시에 일어날 때 결과가 하나만 나오는지.
+ * 랜덤 선택에서 시간 초과로 다시 뽑기(한 바퀴까지만), 그리고 여러 일이 동시에 일어날 때 결과가 하나만 나오는지.
  */
 @IntegrationTest
 class RandomPickTest {
@@ -68,6 +69,44 @@ class RandomPickTest {
 		assertThat(picker(room)).as("한 바퀴 안에서는 이미 뽑힌 사람을 다시 뽑지 않는다").isNotEqualTo(first);
 		assertThat(state(room).pickTurn()).isEqualTo(2);
 		assertThat(room(room).getPhaseEndsAt()).isEqualTo(deadline.plusSeconds(PhaseDurations.DEFAULT_SECONDS));
+	}
+
+	@Test
+	@DisplayName("모두 한 번씩 뽑혔는데 아무도 안 정하면 더는 자동으로 다시 뽑지 않고, 마지막에 뽑힌 사람은 시간 제한 없이 정할 수 있다")
+	void stopsRedrawingAfterOneCycle() {
+		PickRoom room = randomPickRoom(2);
+		phaseService.advanceExpiredPhases(room(room).getPhaseEndsAt()); // 첫 사람 시간 초과 → 두 번째 사람
+		String last = picker(room);
+		Instant lastDeadline = room(room).getPhaseEndsAt();
+
+		phaseService.advanceExpiredPhases(lastDeadline); // 두 번째 사람도 시간 초과 → 모두 한 번씩 뽑혔다
+
+		assertThat(state(room).pickTurn()).as("다시 뽑지 않았다").isEqualTo(2);
+		assertThat(room(room).getPhaseEndsAt()).as("타이머가 멈췄다").isNull();
+		assertThat(room(room).isPhaseExpired(lastDeadline.plus(Duration.ofDays(1)))).as("하루가 지나도 시간 초과가 없다")
+			.isFalse();
+		assertThat(picker(room)).as("마지막에 뽑힌 사람이 그대로 정할 차례다").isEqualTo(last);
+
+		pickService.decide(room.code(), last, "김밥");
+
+		assertThat(state(room).status()).isEqualTo(RoomStatus.FINISHED);
+		assertThat(state(room).result().name()).isEqualTo("김밥");
+	}
+
+	@Test
+	@DisplayName("자동 다시 뽑기가 멈춘 뒤 방장이 다른 사람 뽑기를 누르면 다음 바퀴가 시작되고, 시간 제한도 다시 생긴다")
+	void hostStartsNextCycleAfterStop() {
+		PickRoom room = randomPickRoom(2);
+		phaseService.advanceExpiredPhases(room(room).getPhaseEndsAt());
+		phaseService.advanceExpiredPhases(room(room).getPhaseEndsAt());
+		assertThat(room(room).getPhaseEndsAt()).isNull();
+
+		phaseService.advanceByHost(room.code(), room.host(), RoomStatus.RANDOM_PICK, 2);
+
+		assertThat(state(room).pickTurn()).isEqualTo(3);
+		assertThat(room(room).getPhaseEndsAt()).isNotNull();
+		assertThat(pickTurnRepository.findByRoomOrderByTurnNumber(room(room)).getLast().getCycle()).isEqualTo(2);
+		picker(room); // 새 바퀴에서 누군가 뽑혀 있다
 	}
 
 	@Test

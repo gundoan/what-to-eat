@@ -230,6 +230,18 @@ class RoomTest {
 		}
 
 		@Test
+		@DisplayName("모두 한 번씩 뽑혀 자동 다시 뽑기를 멈추면 시간 제한이 없어지고, 단계는 그대로다")
+		void stopsTimerAfterEveryoneWasPicked() {
+			Room room = randomPickRoom(PhaseDurations.defaults());
+
+			room.stopPickTimer();
+
+			assertThat(room.getStatus()).isEqualTo(RoomStatus.RANDOM_PICK);
+			assertThat(room.getPhaseEndsAt()).isNull();
+			assertThat(room.isPhaseExpired(START.plusSeconds(100_000))).isFalse();
+		}
+
+		@Test
 		@DisplayName("뽑힌 사람이 정한 이름으로 결정되고, 메뉴 목록에 없는 이름이어도 된다")
 		void decidesWithPickedName() {
 			Room room = randomPickRoom(PhaseDurations.defaults());

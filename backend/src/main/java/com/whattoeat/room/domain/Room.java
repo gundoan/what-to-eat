@@ -189,6 +189,15 @@ public class Room {
 	}
 
 	/**
+	 * 랜덤 선택에서 모두 한 번씩 뽑혔는데 아무도 정하지 않았다. 더는 자동으로 다시 뽑지 않도록 타이머를 멈춘다.
+	 * 마지막에 뽑힌 사람은 시간 제한 없이 정할 수 있고, 방장은 "다른 사람 뽑기"로 다음 바퀴를 시작할 수 있다.
+	 */
+	public void stopPickTimer() {
+		requireStatus(RoomStatus.RANDOM_PICK);
+		this.phaseEndsAt = null;
+	}
+
+	/**
 	 * 지금(또는 마지막으로 끝난) 투표가 몇 번째 판인지. 투표 중이면 1, 재투표 중이면 2이고,
 	 * 끝난 방은 재투표로 결정됐으면 2, 아니면 1이다.
 	 */

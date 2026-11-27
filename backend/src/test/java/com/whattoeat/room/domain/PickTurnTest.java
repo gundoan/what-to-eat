@@ -66,6 +66,21 @@ class PickTurnTest {
 	}
 
 	@Test
+	@DisplayName("지금 바퀴에서 모두 한 번씩 뽑혔는지 안다. 늦게 들어와 아직 안 뽑힌 사람이 있으면 다 뽑힌 것이 아니다")
+	void knowsWhenCycleIsComplete() {
+		List<Participant> people = new ArrayList<>(people(2));
+		List<PickTurn> oneDrawn = drawAndExpire(people, 1);
+		List<PickTurn> bothDrawn = drawAndExpire(people, 2);
+
+		assertThat(PickTurn.isCycleComplete(people, List.of())).as("아직 아무도 안 뽑음").isFalse();
+		assertThat(PickTurn.isCycleComplete(people, oneDrawn)).isFalse();
+		assertThat(PickTurn.isCycleComplete(people, bothDrawn)).isTrue();
+
+		people.add(participant(99));
+		assertThat(PickTurn.isCycleComplete(people, bothDrawn)).as("늦게 온 사람이 아직 안 뽑힘").isFalse();
+	}
+
+	@Test
 	@DisplayName("중간에 들어온 사람은 지금 바퀴에서 아직 안 뽑힌 사람이라 바로 후보가 된다")
 	void lateJoinerIsACandidate() {
 		List<Participant> people = new ArrayList<>(people(1));

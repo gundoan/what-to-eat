@@ -25,7 +25,8 @@ import org.hibernate.type.SqlTypes;
  *
  * <ul>
  * <li>뽑힌 사람만 메뉴를 정할 수 있고, 넘기기는 없다. 시간 안에 안 정하거나 방장이 "다른 사람 뽑기"를 누르면 다음 차례로 넘어간다.</li>
- * <li>카드 뽑기처럼 한 바퀴(cycle) 안에서는 이미 뽑힌 사람을 다시 뽑지 않는다. 모두 뽑히면 다음 바퀴로 처음부터 뽑는다.</li>
+ * <li>카드 뽑기처럼 한 바퀴(cycle) 안에서는 이미 뽑힌 사람을 다시 뽑지 않는다.</li>
+ * <li>시간 초과로 다시 뽑는 것은 한 바퀴까지만 한다. 모두 뽑힌 뒤에는 방장이 "다른 사람 뽑기"를 눌러야 다음 바퀴를 처음부터 뽑는다.</li>
  * <li>방마다 정하는 중(ACTIVE)인 차례는 하나뿐이다. DB도 막는다.</li>
  * </ul>
  */
@@ -93,22 +94,40 @@ public class PickTurn {
 		if (participants.isEmpty()) {
 			throw new IllegalArgumentException("방에는 방장이 있으므로 참여자가 없을 수 없다");
 		}
-		int cycle = previousTurns.isEmpty() ? 1 : previousTurns.getLast().getCycle();
-		Set<Long> pickedThisCycle = previousTurns.stream()
-			.filter(turn -> turn.getCycle() == cycle)
-			.map(turn -> turn.getParticipant().getId())
-			.collect(Collectors.toSet());
-		List<Participant> candidates = participants.stream()
-			.filter(participant -> !pickedThisCycle.contains(participant.getId()))
-			.toList();
-		int nextCycle = cycle;
+		int cycle = currentCycle(previousTurns);
+		List<Participant> candidates = notPickedIn(cycle, participants, previousTurns);
 		if (candidates.isEmpty()) {
-			// 한 바퀴를 다 돌았는데 아무도 안 정했다. 카드를 다시 모아 섞듯이 처음부터 뽑는다.
-			nextCycle = cycle + 1;
+			// 한 바퀴를 다 돌았는데 아무도 안 정했다(시간 초과로는 한 바퀴까지만 뽑으므로, 방장이 "다른 사람 뽑기"를 누른 것이다).
+			// 카드를 다시 모아 섞듯이 처음부터 뽑는다.
+			cycle++;
 			candidates = participants;
 		}
 		Participant chosen = candidates.get(random.nextInt(candidates.size()));
-		return new PickTurn(room, chosen, previousTurns.size() + 1, nextCycle, now);
+		return new PickTurn(room, chosen, previousTurns.size() + 1, cycle, now);
+	}
+
+	/**
+	 * 지금 바퀴에서 모두 한 번씩 뽑혔는지. 시간 초과로 자동으로 다시 뽑는 것은 한 바퀴까지만 한다.
+	 * 모두 나가 버린 방이 끝없이 다시 뽑지 않게 하려는 것이다.
+	 *
+	 * @param participants 방의 참여자 모두. 늦게 들어와 아직 안 뽑힌 사람이 있으면 다 뽑힌 것이 아니다
+	 * @param turns 이 방의 차례들(순서대로, 정하는 중인 차례 포함)
+	 */
+	public static boolean isCycleComplete(List<Participant> participants, List<PickTurn> turns) {
+		return !turns.isEmpty() && notPickedIn(currentCycle(turns), participants, turns).isEmpty();
+	}
+
+	private static int currentCycle(List<PickTurn> turns) {
+		return turns.isEmpty() ? 1 : turns.getLast().getCycle();
+	}
+
+	/** cycle번째 바퀴에서 아직 안 뽑힌 사람들 */
+	private static List<Participant> notPickedIn(int cycle, List<Participant> participants, List<PickTurn> turns) {
+		Set<Long> picked = turns.stream()
+			.filter(turn -> turn.getCycle() == cycle)
+			.map(turn -> turn.getParticipant().getId())
+			.collect(Collectors.toSet());
+		return participants.stream().filter(participant -> !picked.contains(participant.getId())).toList();
 	}
 
 	/** 뽑힌 사람이 메뉴를 정했다. */

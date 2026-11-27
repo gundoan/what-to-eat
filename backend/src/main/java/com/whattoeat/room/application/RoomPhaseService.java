@@ -204,7 +204,7 @@ public class RoomPhaseService {
 				List<Ballot> ballots = ballotRepository.findWithVotesByRoomAndVoteRound(room, Ballot.REVOTE_ROUND);
 				room.finishRevote(VoteTally.count(candidates, ballots), candidates, random, now);
 			}
-			// 시간 안에 정하지 않았다. 다른 사람을 다시 뽑는다(단계는 그대로 랜덤 선택).
+			// 시간 안에 정하지 않았다. 다른 사람을 다시 뽑거나, 모두 한 번씩 뽑혔으면 타이머를 멈춘다(단계는 그대로 랜덤 선택).
 			case RANDOM_PICK -> pickPhase.expire(room, now);
 			case FINISHED -> throw new BusinessException(ErrorCode.NO_NEXT_PHASE);
 		}
