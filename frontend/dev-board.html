@@ -1,0 +1,93 @@
+<!doctype html>
+<!--
+  개발용 여러 명 테스트 화면. 개발 서버(npm run dev)에서 http://localhost:5173/dev-board.html 로 연다.
+  배포용 빌드(npm run build)는 index.html만 만들기 때문에 이 화면은 들어가지 않는다.
+-->
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>여러 명 테스트 화면 (개발용)</title>
+    <style>
+      html,
+      body,
+      #root {
+        height: 100%;
+        margin: 0;
+      }
+      body {
+        font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+        background: #e5e7eb;
+        color: #111827;
+      }
+      .board {
+        display: flex;
+        flex-direction: column;
+        height: 100%;
+      }
+      .board > header {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 6px 16px;
+        padding: 8px 12px;
+        background: #ffffff;
+        border-bottom: 1px solid #d1d5db;
+      }
+      .board h1 {
+        margin: 0;
+        font-size: 16px;
+      }
+      .board .hint {
+        flex-basis: 100%;
+        margin: 0;
+        font-size: 13px;
+        color: #4b5563;
+      }
+      .panels {
+        flex: 1;
+        display: grid;
+        gap: 8px;
+        padding: 8px;
+        min-height: 0;
+      }
+      .panel {
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
+        min-height: 0;
+        background: #ffffff;
+        border: 1px solid #9ca3af;
+        border-radius: 8px;
+        overflow: hidden;
+      }
+      .panel-bar {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 4px 8px;
+        background: #f3f4f6;
+        border-bottom: 1px solid #d1d5db;
+      }
+      .panel-bar strong {
+        margin-right: auto;
+      }
+      .panel iframe {
+        flex: 1;
+        width: 100%;
+        border: 0;
+      }
+      .panel .empty {
+        margin: auto;
+        padding: 16px;
+        text-align: center;
+        color: #4b5563;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/devBoard/main.tsx"></script>
+  </body>
+</html>
