@@ -66,12 +66,12 @@ class RoomApiTest {
 		@DisplayName("방장이 정한 단계별 시간을 저장한다")
 		void savesChosenDurations() throws Exception {
 			CreatedRoom room = createRoom("""
-					{"proposalSeconds": 30, "mergeSeconds": 600, "voteSeconds": 90, "randomPickSeconds": 120}
+					{"proposalSeconds": 30, "mergeSeconds": 3600, "voteSeconds": 90, "randomPickSeconds": 120}
 					""");
 
 			mockMvc.perform(get("/api/rooms/" + room.code()).cookie(room.cookie()))
 				.andExpect(jsonPath("$.room.phaseDurations.proposalSeconds").value(30))
-				.andExpect(jsonPath("$.room.phaseDurations.mergeSeconds").value(600))
+				.andExpect(jsonPath("$.room.phaseDurations.mergeSeconds").value(3600))
 				.andExpect(jsonPath("$.room.phaseDurations.voteSeconds").value(90))
 				.andExpect(jsonPath("$.room.phaseDurations.randomPickSeconds").value(120));
 		}
@@ -96,8 +96,8 @@ class RoomApiTest {
 		}
 
 		@ParameterizedTest(name = "{0}초는 거절한다")
-		@ValueSource(ints = { 29, 601, 45 })
-		@DisplayName("단계 시간이 규칙(30초~10분, 30초 단위)을 벗어나면 400으로 거절한다")
+		@ValueSource(ints = { 29, 3601, 45 })
+		@DisplayName("단계 시간이 규칙(30초~60분, 30초 단위)을 벗어나면 400으로 거절한다")
 		void rejectsInvalidDuration(int seconds) throws Exception {
 			mockMvc.perform(post("/api/rooms").contentType(MediaType.APPLICATION_JSON)
 				.content("{\"voteSeconds\": " + seconds + "}"))

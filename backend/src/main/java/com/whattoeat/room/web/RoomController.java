@@ -45,7 +45,7 @@ public class RoomController {
 		this.participantCookie = participantCookie;
 	}
 
-	/** 방 만들기. 본문을 아예 보내지 않으면 모든 단계가 1분이다. */
+	/** 방 만들기. 본문을 아예 보내지 않으면 모든 단계가 기본값이다(제안, 합치기, 투표 5분, 랜덤 선택 1분). */
 	@PostMapping
 	public ResponseEntity<CreateRoomResponse> create(@RequestBody(required = false) CreateRoomRequest request) {
 		PhaseDurations durations = request == null ? PhaseDurations.defaults() : request.toPhaseDurations();
