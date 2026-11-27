@@ -84,10 +84,13 @@ public class Room {
 		return participantCount >= MAX_PARTICIPANTS;
 	}
 
-	/** 대기 중 → 제안 중. 방장이 정한 제안 시간만큼 타이머를 건다. */
+	/**
+	 * 대기 중 → 제안 중. 방장이 정한 제안 시간만큼 타이머를 건다.
+	 * 다른 단계도 마찬가지로, 방장이 "제한 없음"으로 정한 단계에는 타이머를 걸지 않는다.
+	 */
 	public void startProposal(Instant now) {
 		requireStatus(RoomStatus.WAITING);
-		moveTo(RoomStatus.PROPOSING, now, phaseDurations.proposalSeconds());
+		moveTo(RoomStatus.PROPOSING, now, phaseDurations.proposalLimit());
 	}
 
 	/**
@@ -103,7 +106,7 @@ public class Room {
 	public void finishProposal(List<Menu> menus, Instant now) {
 		requireStatus(RoomStatus.PROPOSING);
 		if (menus.size() >= 2) {
-			moveTo(RoomStatus.MERGING, now, phaseDurations.mergeSeconds());
+			moveTo(RoomStatus.MERGING, now, phaseDurations.mergeLimit());
 		}
 		else if (menus.size() == 1) {
 			decide(menus.getFirst(), ResultReason.ONLY_MENU, now);
@@ -125,7 +128,7 @@ public class Room {
 			throw new IllegalStateException("방 " + code + "은 합치기 뒤에 남은 메뉴가 없다");
 		}
 		if (remainingMenus.size() >= 2) {
-			moveTo(RoomStatus.VOTING, now, phaseDurations.voteSeconds());
+			moveTo(RoomStatus.VOTING, now, phaseDurations.voteLimit());
 		}
 		else {
 			decide(remainingMenus.getFirst(), ResultReason.ONLY_MENU, now);
@@ -147,7 +150,7 @@ public class Room {
 			decide(leaders.getFirst(), ResultReason.VOTE, now);
 		}
 		else {
-			moveTo(RoomStatus.REVOTING, now, phaseDurations.voteSeconds());
+			moveTo(RoomStatus.REVOTING, now, phaseDurations.voteLimit());
 		}
 	}
 
@@ -182,10 +185,10 @@ public class Room {
 		moveTo(RoomStatus.FINISHED, now, null);
 	}
 
-	/** 랜덤 선택에서 다른 사람을 다시 뽑았다. 새로 뽑힌 사람에게 랜덤 선택 시간을 처음부터 준다. */
+	/** 랜덤 선택에서 다른 사람을 다시 뽑았다. 새로 뽑힌 사람에게 랜덤 선택 시간을 처음부터 준다(제한 없음이면 시간 제한 없이). */
 	public void restartPickTimer(Instant now) {
 		requireStatus(RoomStatus.RANDOM_PICK);
-		moveTo(RoomStatus.RANDOM_PICK, now, phaseDurations.randomPickSeconds());
+		moveTo(RoomStatus.RANDOM_PICK, now, phaseDurations.randomPickLimit());
 	}
 
 	/**
@@ -209,7 +212,7 @@ public class Room {
 
 	/** 아무도 메뉴를 내지 않았거나 아무도 투표하지 않았다. 뽑기 차례는 서비스가 만들고, 뽑힌 사람에게 랜덤 선택 시간을 준다. */
 	private void startRandomPick(Instant now) {
-		moveTo(RoomStatus.RANDOM_PICK, now, phaseDurations.randomPickSeconds());
+		moveTo(RoomStatus.RANDOM_PICK, now, phaseDurations.randomPickLimit());
 	}
 
 	/** 메뉴를 결정하고 끝낸다. 끝난 방에는 더 넘어갈 단계가 없다. */
@@ -224,7 +227,7 @@ public class Room {
 		return phaseEndsAt != null && !now.isBefore(phaseEndsAt);
 	}
 
-	/** @param seconds 이 단계의 시간. null이면 시간 제한이 없다 */
+	/** @param seconds 이 단계의 시간. null이면 시간 제한이 없다(대기 중, 끝남, 방장이 "제한 없음"으로 정한 단계) */
 	private void moveTo(RoomStatus next, Instant now, Integer seconds) {
 		this.status = next;
 		this.phaseStartedAt = now;

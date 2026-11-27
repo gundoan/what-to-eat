@@ -1,4 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
+import { NO_LIMIT } from '../utils/duration'
+
+/** 빠른 방 만들기 버튼. 네 단계 시간을 모두 같은 값으로 정해서 방을 바로 만든다. */
+export const QUICK_ROOMS = [
+  { label: '시간 제한 없음', seconds: NO_LIMIT },
+  { label: '모두 30초', seconds: 30 },
+] as const
 
 /**
  * 칸은 4개까지만 둔다. HTTP/1.1에서 브라우저는 한 주소(localhost:5173)에 연결을 6개까지만 열고,
@@ -25,7 +32,7 @@ type BoardState = {
 
 /**
  * 여러 명 테스트 화면의 로직.
- * 1) 칸 1에서 방을 만들면 그 방 코드를 알아낸다(칸 1의 주소를 0.5초마다 본다).
+ * 1) 칸 1에서 방을 만들면 그 방 코드를 알아낸다(칸 1의 주소를 0.5초마다 본다). "빠른 방 만들기"로 바로 만들 수도 있다.
  * 2) 다른 칸을 같은 방에 들여보내거나, 칸을 닫고(나가기) 다시 열고, 새로고침한다.
  * 3) 칸 수, 방 코드, 열린 칸을 주소(?n=4&room=...&open=1,2)에 적어서, 테스트 화면을 새로고침해도 그대로 돌아온다.
  *
@@ -33,6 +40,7 @@ type BoardState = {
  */
 export function useDevBoard() {
   const [state, setState] = useState<BoardState>(initialState)
+  const [createError, setCreateError] = useState<string | null>(null)
   const frames = useRef(new Map<number, HTMLIFrameElement>())
 
   useEffect(() => {
@@ -98,6 +106,35 @@ export function useDevBoard() {
     frames.current.get(number)?.contentWindow?.location.reload()
   }
 
+  /**
+   * 빠른 방 만들기: 네 단계 시간을 모두 seconds로 정해 방을 바로 만들고, 칸 1을 그 방으로 연다. 나머지 칸은 닫는다.
+   * 칸 1과 같은 주소(/p/1/api)로 만들어서, 개발 서버가 방장 쿠키를 칸 1의 경로에 저장한다. 그래서 칸 1이 방장이다.
+   */
+  async function quickCreate(seconds: number) {
+    setCreateError(null)
+    try {
+      const response = await fetch('/p/1/api/rooms', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          proposalSeconds: seconds,
+          mergeSeconds: seconds,
+          voteSeconds: seconds,
+          randomPickSeconds: seconds,
+        }),
+      })
+      if (!response.ok) throw new Error(`HTTP ${response.status}`)
+      const { code } = (await response.json()) as { code: string }
+      setState((current) => ({
+        ...current,
+        code,
+        panels: current.panels.map((panel) => (panel.number === 1 ? open(panel, roomUrl(1, code)) : close(panel))),
+      }))
+    } catch {
+      setCreateError('방을 만들지 못했어요. 백엔드가 켜져 있는지 확인해 주세요.')
+    }
+  }
+
   /** 칸 1만 방 만들기 화면으로 돌아가고 나머지 칸은 닫는다. 새 방에서는 쿠키도 새로 받아서 모두 새 참여자가 된다. */
   function restart() {
     setState((current) => ({
@@ -124,11 +161,14 @@ export function useDevBoard() {
     panels: state.panels.filter((panel) => panel.number <= state.count),
     /** 같은 방을 다른 브라우저(칸 밖)에서 열 주소. 인터넷 끊기처럼 칸 하나만으로 못 하는 테스트에 쓴다 */
     outsideUrl: state.code === null ? null : `${window.location.origin}/rooms/${encodeURIComponent(state.code)}`,
+    /** 빠른 방 만들기가 실패했을 때의 안내 */
+    createError,
     setCount,
     joinAll,
     join,
     close: closePanel,
     reload,
+    quickCreate,
     restart,
     frameRef,
   }

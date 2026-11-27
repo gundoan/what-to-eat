@@ -1,6 +1,8 @@
 package com.whattoeat.room.web;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.hamcrest.Matchers.nullValue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
@@ -22,6 +24,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.dao.DataAccessException;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -44,16 +47,16 @@ class RoomApiTest {
 	class CreateRoom {
 
 		@Test
-		@DisplayName("시간을 보내지 않으면 모든 단계가 1분이고, 만든 사람이 방장이다")
+		@DisplayName("시간을 보내지 않으면 제안, 합치기, 투표는 5분, 랜덤 선택은 1분이고, 만든 사람이 방장이다")
 		void createsRoomWithDefaultsAndCreatorIsHost() throws Exception {
 			CreatedRoom room = createRoom(null);
 
 			mockMvc.perform(get("/api/rooms/" + room.code()).cookie(room.cookie()))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.room.status").value("WAITING"))
-				.andExpect(jsonPath("$.room.phaseDurations.proposalSeconds").value(60))
-				.andExpect(jsonPath("$.room.phaseDurations.mergeSeconds").value(60))
-				.andExpect(jsonPath("$.room.phaseDurations.voteSeconds").value(60))
+				.andExpect(jsonPath("$.room.phaseDurations.proposalSeconds").value(300))
+				.andExpect(jsonPath("$.room.phaseDurations.mergeSeconds").value(300))
+				.andExpect(jsonPath("$.room.phaseDurations.voteSeconds").value(300))
 				.andExpect(jsonPath("$.room.phaseDurations.randomPickSeconds").value(60))
 				.andExpect(jsonPath("$.room.participantCount").value(1))
 				.andExpect(jsonPath("$.me.host").value(true));
@@ -73,6 +76,25 @@ class RoomApiTest {
 				.andExpect(jsonPath("$.room.phaseDurations.randomPickSeconds").value(120));
 		}
 
+		@Test
+		@DisplayName("0초는 \"제한 없음\"으로 저장되고, 시작해도 끝나는 시각이 없다")
+		void savesNoLimitAndStartsWithoutDeadline() throws Exception {
+			CreatedRoom room = createRoom("""
+					{"proposalSeconds": 0, "mergeSeconds": 0, "voteSeconds": 0, "randomPickSeconds": 0}
+					""");
+
+			mockMvc.perform(post("/api/rooms/" + room.code() + "/next-phase").cookie(room.cookie())
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("{\"from\": \"WAITING\"}"))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.room.status").value("PROPOSING"))
+				.andExpect(jsonPath("$.room.phaseDurations.proposalSeconds").value(0))
+				.andExpect(jsonPath("$.room.phaseDurations.randomPickSeconds").value(0))
+				.andExpect(jsonPath("$.room.phaseEndsAt", nullValue()))
+				// API에는 초만 보낸다. 서버 코드의 도우미(proposalLimit 등)는 나가지 않는다.
+				.andExpect(jsonPath("$.room.phaseDurations.proposalLimit").doesNotExist());
+		}
+
 		@ParameterizedTest(name = "{0}초는 거절한다")
 		@ValueSource(ints = { 29, 601, 45 })
 		@DisplayName("단계 시간이 규칙(30초~10분, 30초 단위)을 벗어나면 400으로 거절한다")
@@ -81,6 +103,22 @@ class RoomApiTest {
 				.content("{\"voteSeconds\": " + seconds + "}"))
 				.andExpect(status().isBadRequest())
 				.andExpect(jsonPath("$.code").value("INVALID_PHASE_DURATION"));
+		}
+
+		@Test
+		@DisplayName("DB도 단계 시간 규칙을 지킨다: 0초(제한 없음)는 받고, 규칙에 없는 시간은 막는다")
+		void databaseAllowsNoLimitButRejectsInvalidSeconds() throws Exception {
+			CreatedRoom room = createRoom(null);
+
+			jdbcTemplate.update("update room set proposal_seconds = 0 where code = ?", room.code());
+
+			assertThat(jdbcTemplate.queryForObject("select proposal_seconds from room where code = ?", Integer.class,
+					room.code()))
+				.isZero();
+			assertThatThrownBy(
+					() -> jdbcTemplate.update("update room set vote_seconds = 15 where code = ?", room.code()))
+				.isInstanceOf(DataAccessException.class)
+				.hasMessageContaining("chk_room_vote_seconds");
 		}
 
 		@Test

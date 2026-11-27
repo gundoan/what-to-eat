@@ -2,6 +2,7 @@ package com.whattoeat.room.application;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -51,6 +52,32 @@ class PhaseTimeoutTest {
 		phaseService.advanceExpiredPhases(deadline);
 		// 아무도 제안하지 않았으므로 랜덤 선택으로 간다.
 		assertThat(room(room).getStatus()).isEqualTo(RoomStatus.RANDOM_PICK);
+	}
+
+	@Test
+	@DisplayName("\"제한 없음\"인 단계는 하루가 지나도 넘어가지 않고, 모두 끝내거나 방장이 넘기면 넘어간다")
+	void noLimitPhasesWaitForEveryoneOrHost() {
+		int none = PhaseDurations.NO_LIMIT;
+		CreatedRoom created = roomService.create(PhaseDurations.of(none, none, none, none));
+		String guest = roomService.join(created.code(), null).newToken();
+		phaseService.advanceByHost(created.code(), created.token(), RoomStatus.WAITING, null);
+		StartedRoom room = new StartedRoom(created.code(), List.of(created.token(), guest));
+		Instant dayLater = room(room).getPhaseStartedAt().plus(Duration.ofDays(1));
+
+		phaseService.advanceExpiredPhases(dayLater);
+		assertThat(room(room).getStatus()).as("시간이 다 되는 일이 없다").isEqualTo(RoomStatus.PROPOSING);
+		assertThat(room(room).getPhaseEndsAt()).isNull();
+
+		proposalService.propose(room.code(), room.host(), "김밥");
+		proposalService.propose(room.code(), guest, "순댓국");
+		assertThat(room(room).getStatus()).as("모두 끝내면 넘어간다").isEqualTo(RoomStatus.MERGING);
+
+		phaseService.advanceExpiredPhases(dayLater);
+		assertThat(room(room).getStatus()).isEqualTo(RoomStatus.MERGING);
+
+		phaseService.advanceByHost(room.code(), room.host(), RoomStatus.MERGING, null);
+		assertThat(room(room).getStatus()).as("방장이 넘기면 넘어간다").isEqualTo(RoomStatus.VOTING);
+		assertThat(room(room).getPhaseEndsAt()).isNull();
 	}
 
 	@Test
