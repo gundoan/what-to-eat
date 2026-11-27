@@ -13,7 +13,7 @@ type Props = {
 export function ProposingPhase({ room, me, actions }: Props) {
   return (
     <section>
-      <Countdown localDeadline={room.localDeadline} receivedAt={room.receivedAt} />
+      <Countdown room={room} />
       <p>
         {room.participantCount}명 중 {room.doneCount}명 끝냄
       </p>
