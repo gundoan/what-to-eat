@@ -6,6 +6,7 @@
  * 브라우저는 쿠키를 경로마다 따로 보관하므로, 한 탭 안에서도 칸마다 다른 참여자가 된다.
  *
  * 배포용 빌드에서는 import.meta.env.DEV가 false로 바뀌어 panelBase가 항상 빈 문자열이 되고, 칸을 찾는 코드는 빌드 결과에서 빠진다.
+ * CI(.github/workflows/ci.yml)가 배포용 빌드에 아래 정규식(p\/\d+)이 없는지 검사한다. 정규식을 바꾸면 CI 검사도 같이 바꾼다.
  */
 export const panelBase: string = import.meta.env.DEV ? panelBaseOf(window.location.pathname) : ''
 

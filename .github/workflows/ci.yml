@@ -41,3 +41,8 @@ jobs:
       - run: npm ci
       - run: npm run lint
       - run: npm run build
+      # 개발용 여러 명 테스트 화면(dev-board.html)과 칸 주소 처리 코드(src/devPanel.ts의 p\/\d+)는 배포용 빌드에 들어가면 안 된다.
+      - name: 배포용 빌드에 개발용 코드가 없는지 확인
+        run: |
+          if [ -e dist/dev-board.html ]; then echo "배포용 빌드에 dev-board.html이 들어 있다"; exit 1; fi
+          if grep -rqF 'p\/\d+' dist; then echo "배포용 빌드에 칸 주소 처리 코드가 들어 있다"; exit 1; fi
