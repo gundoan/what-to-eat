@@ -1,4 +1,4 @@
-import { MAX_PANELS, useDevBoard } from './useDevBoard'
+import { MAX_PANELS, QUICK_ROOMS, useDevBoard } from './useDevBoard'
 
 const COUNT_OPTIONS = Array.from({ length: MAX_PANELS }, (_, i) => i + 1)
 
@@ -23,8 +23,19 @@ export function DevBoard() {
             ))}
           </select>
         </label>
+        <span className="quick">
+          빠른 방 만들기
+          {QUICK_ROOMS.map((quick) => (
+            <button key={quick.seconds} type="button" onClick={() => void board.quickCreate(quick.seconds)}>
+              {quick.label}
+            </button>
+          ))}
+        </span>
+        <button type="button" onClick={board.restart}>
+          방 만들기 화면으로
+        </button>
         {board.code === null ? (
-          <span>칸 1에서 방을 만들면 방 코드가 여기에 나와요.</span>
+          <span>방을 만들면 방 코드가 여기에 나와요.</span>
         ) : (
           <span>
             방 코드 <strong>{board.code}</strong>
@@ -33,9 +44,11 @@ export function DevBoard() {
         <button type="button" disabled={board.code === null} onClick={board.joinAll}>
           모든 칸 들어가기
         </button>
-        <button type="button" onClick={board.restart}>
-          새 방으로 처음부터
-        </button>
+        {board.createError !== null && (
+          <p role="alert" className="hint">
+            {board.createError}
+          </p>
+        )}
         <p className="hint">
           칸마다 다른 참여자예요. 확인 창이 뜨면 답할 때까지 모든 칸이 멈춰요.
           {board.outsideUrl !== null && (
