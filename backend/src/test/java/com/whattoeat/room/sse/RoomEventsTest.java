@@ -84,6 +84,21 @@ class RoomEventsTest {
 	}
 
 	@Test
+	@DisplayName("하트비트는 화면의 자바스크립트가 받을 수 있는 'ping' 이벤트로 온다(주석 줄은 자바스크립트가 볼 수 없다)")
+	void heartbeatIsANamedEvent() throws Exception {
+		HttpResponse<String> created = post("/api/rooms", null);
+		String code = codeOf(created.body());
+
+		try (SseTestConnection events = connect(code, cookieOf(created))) {
+			events.nextEventData(RoomEventBroadcaster.ROOM_EVENT, WAIT);
+
+			broadcaster.sendHeartbeat();
+
+			assertThat(events.nextEventData(RoomEventBroadcaster.HEARTBEAT_EVENT, WAIT)).isEqualTo("ping");
+		}
+	}
+
+	@Test
 	@DisplayName("한 사람이 방 화면을 여러 개(탭) 열어도 '지금 접속 중'은 한 명으로 센다")
 	void countsOnePersonOnceEvenWithManyTabs() throws Exception {
 		HttpResponse<String> created = post("/api/rooms", null);
