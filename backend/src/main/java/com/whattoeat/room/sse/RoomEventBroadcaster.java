@@ -36,10 +36,19 @@ public class RoomEventBroadcaster {
 
 	static final String ROOM_EVENT = "room";
 
+	/**
+	 * 하트비트 이벤트 이름. 주석 줄(":")은 브라우저의 자바스크립트가 볼 수 없어서, 이름 있는 이벤트로 보낸다.
+	 * 화면은 이 이벤트가 한동안 오지 않으면 연결이 소리 없이 끊긴 것으로 보고 다시 연결한다.
+	 */
+	static final String HEARTBEAT_EVENT = "ping";
+
 	/** 연결을 이 시간 뒤에 서버가 닫는다. 브라우저(EventSource)는 자동으로 다시 연결한다. */
 	private static final long CONNECTION_TIMEOUT_MILLIS = Duration.ofMinutes(30).toMillis();
 
-	/** 하트비트 간격(초). 끊긴 연결을 알아채는 시간도 이것에 달려 있다. */
+	/**
+	 * 하트비트 간격(초). 서버가 끊긴 연결을 알아채는 시간과, 화면이 소리 없이 끊긴 연결을 알아채는 시간이 모두 이것에 달려 있다.
+	 * 화면(frontend/src/api/rooms.ts)은 이 간격의 2.5배 동안 아무것도 받지 못하면 다시 연결한다.
+	 */
 	private static final long HEARTBEAT_SECONDS = 10;
 
 	private final RoomChannels channels;
@@ -104,10 +113,14 @@ public class RoomEventBroadcaster {
 	}
 
 	/**
-	 * 오래 조용한 연결은 중간의 프록시가 끊을 수 있어서, 10초마다 내용 없는 주석 줄을 보낸다.
-	 * 서버는 끊긴 연결에 무언가를 보내 봐야 끊긴 것을 알 수 있어서, 끊긴 연결도 이때 정리된다.
-	 * 정리해서 "지금 접속 중"이 줄었으면 남은 사람들에게 바뀐 인원을 알린다.
-	 * 간격이 짧을수록 탭을 닫은 사람이 "지금 접속 중"에서 빨리 빠진다. 보내는 양은 연결마다 10초에 한 줄이라 아주 적다.
+	 * 10초마다 하트비트(ping 이벤트)를 보낸다. 하는 일은 세 가지다.
+	 * <ul>
+	 * <li>오래 조용한 연결은 중간의 프록시가 끊을 수 있어서, 연결이 살아 있게 한다.</li>
+	 * <li>서버는 끊긴 연결에 무언가를 보내 봐야 끊긴 것을 알 수 있어서, 끊긴 연결을 이때 정리한다.
+	 * 정리해서 "지금 접속 중"이 줄었으면 남은 사람들에게 바뀐 인원을 알린다.</li>
+	 * <li>화면은 이 이벤트가 끊기면 연결이 소리 없이 끊긴 것으로 알아챈다(중간의 프록시가 끊김을 전하지 않을 때).</li>
+	 * </ul>
+	 * 보내는 양은 연결마다 10초에 한 줄이라 아주 적다.
 	 */
 	@Scheduled(fixedRate = HEARTBEAT_SECONDS, timeUnit = TimeUnit.SECONDS)
 	public void sendHeartbeat() {
@@ -115,7 +128,8 @@ public class RoomEventBroadcaster {
 			synchronized (channel) {
 				for (Subscriber subscriber : channel.subscribers()) {
 					try {
-						subscriber.emitter().send(SseEmitter.event().comment("heartbeat"));
+						// 데이터가 빈 이벤트는 브라우저가 무시하므로, 짧은 내용을 넣는다.
+						subscriber.emitter().send(SseEmitter.event().name(HEARTBEAT_EVENT).data("ping"));
 					}
 					catch (IOException | IllegalStateException e) {
 						channels.remove(roomCode, subscriber);

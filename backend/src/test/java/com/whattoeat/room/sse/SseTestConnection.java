@@ -15,7 +15,7 @@ import java.util.stream.Stream;
 
 /**
  * 테스트에서 SSE 연결을 열어두고 줄 단위로 읽는 도구.
- * SSE는 "event:이름" 줄과 "data:내용" 줄이 오고 빈 줄로 이벤트가 끝난다. ":"로 시작하는 줄은 주석(하트비트)이다.
+ * SSE는 "event:이름" 줄과 "data:내용" 줄이 오고 빈 줄로 이벤트가 끝난다. 이름으로 골라 읽으므로 하트비트("ping")는 건너뛴다.
  */
 final class SseTestConnection implements AutoCloseable {
 
@@ -71,7 +71,9 @@ final class SseTestConnection implements AutoCloseable {
 				currentEvent = line.substring("event:".length()).trim();
 			}
 			else if (line.startsWith("data:") && eventName.equals(currentEvent)) {
-				return Optional.of(line.substring("data:".length()));
+				String data = line.substring("data:".length());
+				// 브라우저처럼, 콜론 바로 뒤의 공백 한 칸은 내용이 아니다(SSE 규칙).
+				return Optional.of(data.startsWith(" ") ? data.substring(1) : data);
 			}
 			else if (line.isEmpty()) {
 				currentEvent = null;

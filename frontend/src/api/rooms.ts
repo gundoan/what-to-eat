@@ -93,17 +93,57 @@ type RoomEventHandlers = {
 }
 
 /**
- * SSE로 화면 정보(방 상태 + 내 정보)를 받는다. 연결이 끊기면 브라우저(EventSource)가 알아서 다시 연결하고,
- * 다시 연결되면 서버가 현재 화면 정보를 바로 보내준다. 돌려준 함수를 부르면 연결을 닫는다.
+ * 서버는 10초마다 하트비트(ping 이벤트)를 보낸다. 그 2.5배 동안 아무것도 받지 못하면 연결이 소리 없이 끊긴 것으로 본다.
+ * 하트비트가 조금 늦게 와도 잘못 끊지 않으면서, 사람이 "멈췄나?" 하고 새로고침하기 전에 알아채는 시간이다.
+ */
+const SILENCE_LIMIT_MS = 25_000
+
+/** 연결이 살아 있는지 살피는 간격. 끊긴 뒤 다시 연결을 시도하는 간격이기도 하다. */
+const WATCH_INTERVAL_MS = 5_000
+
+/**
+ * SSE로 화면 정보(방 상태 + 내 정보)를 받는다. 돌려준 함수를 부르면 연결을 닫는다.
+ * - 끊긴 것을 브라우저가 알면 EventSource가 알아서 다시 연결한다. 다시 연결되면 서버가 현재 화면 정보를 바로 보내준다.
+ * - 중간의 프록시나 네트워크가 끊김을 전하지 않으면, 브라우저는 연결이 살아 있다고 믿고 기다리기만 한다.
+ *   그래서 하트비트를 한동안 못 받으면 끊긴 것으로 보고 연결을 새로 만든다.
+ * - 서버가 꺼져 있어서 오류 응답을 받으면 EventSource는 다시 시도하지 않는다(CLOSED). 그때도 연결을 새로 만든다.
  */
 export function subscribeRoom(code: string, handlers: RoomEventHandlers): () => void {
-  const source = new EventSource(`${roomPath(code)}/events`)
-  source.addEventListener('room', (event) => {
-    handlers.onView(JSON.parse((event as MessageEvent<string>).data) as RoomView)
-  })
-  source.onopen = () => handlers.onConnectionChange(true)
-  source.onerror = () => handlers.onConnectionChange(false)
-  return () => source.close()
+  let lastHeardAt = Date.now()
+  const heard = () => {
+    lastHeardAt = Date.now()
+  }
+
+  function connect(): EventSource {
+    const next = new EventSource(`${roomPath(code)}/events`)
+    next.addEventListener('room', (event) => {
+      heard()
+      handlers.onView(JSON.parse((event as MessageEvent<string>).data) as RoomView)
+    })
+    next.addEventListener('ping', heard)
+    next.onopen = () => {
+      heard()
+      handlers.onConnectionChange(true)
+    }
+    next.onerror = () => handlers.onConnectionChange(false)
+    return next
+  }
+
+  let source = connect()
+  const watcher = window.setInterval(() => {
+    const silent = Date.now() - lastHeardAt > SILENCE_LIMIT_MS
+    if (silent || source.readyState === EventSource.CLOSED) {
+      source.close()
+      handlers.onConnectionChange(false)
+      lastHeardAt = Date.now()
+      source = connect()
+    }
+  }, WATCH_INTERVAL_MS)
+
+  return () => {
+    window.clearInterval(watcher)
+    source.close()
+  }
 }
 
 function roomPath(code: string): string {
