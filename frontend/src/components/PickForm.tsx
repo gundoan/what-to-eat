@@ -75,7 +75,7 @@ export function PickForm({ menus, timeRule, onDecide }: Props) {
           value={menuName}
           onChange={(event) => setMenuName(event.target.value)}
           maxLength={30}
-          placeholder={menus.length > 0 ? '고르거나 직접 쓰기 (예: 순댓국)' : '메뉴 이름 (예: 순댓국)'}
+          placeholder={menus.length > 0 ? '고르거나 직접 쓰기 (예: 포테이토 피자)' : '메뉴 이름 (예: 포테이토 피자)'}
         />
         <button type="submit" disabled={chosen === ''}>
           이 메뉴로 정하기

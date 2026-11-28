@@ -3,7 +3,6 @@ import type { Me } from '../../types/room'
 import { BallotForm } from '../BallotForm'
 import { Countdown } from '../Countdown'
 import { MyBallot } from '../MyBallot'
-import { VoteScores } from '../VoteScores'
 
 type Props = {
   room: RoomSnapshot
@@ -13,7 +12,8 @@ type Props = {
 
 /**
  * 투표와 재투표 화면. 규칙은 같고, 표를 줄 수 있는 메뉴(voteCandidates)만 다르다.
- * 재투표에서는 동점이었던 메뉴만 후보이고, 왜 다시 투표하는지 알 수 있게 첫 투표 점수를 보여준다.
+ * 재투표에서는 동점이었던 메뉴만 후보이고, 왜 다시 투표하는지는 한 줄로만 알려준다.
+ * 첫 투표 점수표는 화면만 복잡하게 해서 보여주지 않는다. 두 점수표는 끝난 뒤 결과 화면에 나온다.
  */
 export function VotingPhase({ room, me, actions }: Props) {
   const revote = room.status === 'REVOTING'
@@ -47,13 +47,6 @@ export function VotingPhase({ room, me, actions }: Props) {
           onSubmit={actions.submitVotes}
           onAllGood={actions.voteAllGood}
         />
-      )}
-
-      {revote && (
-        <>
-          <h2>첫 투표 결과</h2>
-          <VoteScores scores={room.voteScores} />
-        </>
       )}
 
       {me.host && (
