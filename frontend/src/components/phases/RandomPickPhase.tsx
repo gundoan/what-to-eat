@@ -22,6 +22,8 @@ const WAITING_TEXT: Record<PickTimeRule, string> = {
  * 누가 뽑혔는지는 뽑힌 본인만 안다(me.picking). 시간 안에 정하지 않으면 서버가 다른 사람을 다시 뽑는다.
  * 모두 한 번씩 뽑힌 뒤에는 자동으로 다시 뽑지 않고, 방장이 "다른 사람 뽑기"를 눌러야 처음부터 다시 뽑는다.
  * 방장이 랜덤 선택을 "제한 없음"으로 정했으면 처음부터 자동으로 다시 뽑지 않는다(다시 뽑기는 "다른 사람 뽑기"로만).
+ * 몇 번째 뽑기인지는 방장에게만 보여준다. 누가 뽑혔는지는 비밀이라 방장 화면은 다시 뽑아도 거의 그대로여서,
+ * 숫자가 없으면 "다른 사람 뽑기"가 됐는지 알 수 없어 또 누르게 된다. 다른 사람에게는 필요 없는 정보라 뺐다.
  */
 export function RandomPickPhase({ room, me, actions }: Props) {
   // 메뉴가 하나도 없으면 제안 단계에서, 있으면 투표 단계에서 넘어온 것이다.
@@ -32,7 +34,7 @@ export function RandomPickPhase({ room, me, actions }: Props) {
     <section>
       <Countdown room={room} />
       <p>
-        {why}, 랜덤으로 뽑힌 한 사람이 메뉴를 정해요. 누가 뽑혔는지는 비밀이에요. ({room.pickTurn}번째 뽑기)
+        {why}, 랜덤으로 뽑힌 한 사람이 메뉴를 정해요. 누가 뽑혔는지는 비밀이에요.
       </p>
 
       {me.picking ? (
@@ -48,6 +50,7 @@ export function RandomPickPhase({ room, me, actions }: Props) {
               ? '모두 한 번씩 뽑혔는데 아직 아무도 정하지 않았어요. 다른 사람 뽑기를 누르면 처음부터 다시 뽑아요.'
               : '뽑힌 사람이 자리에 없는 것 같으면 다른 사람을 뽑을 수 있어요.'}
           </p>
+          {room.pickTurn !== null && room.pickTurn >= 2 && <p className="hint">지금 {room.pickTurn}번째 뽑기예요.</p>}
           {/* 방장은 메뉴를 정하지 않는다. 뽑힌 사람이 자리에 없을 때 다른 사람에게 넘기기만 한다. */}
           <button type="button" onClick={actions.nextPhase}>
             다른 사람 뽑기
