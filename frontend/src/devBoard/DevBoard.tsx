@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { MAX_PANELS, QUICK_ROOMS, useDevBoard } from './useDevBoard'
 
 const COUNT_OPTIONS = Array.from({ length: MAX_PANELS }, (_, i) => i + 1)
@@ -34,11 +35,13 @@ export function DevBoard() {
         <button type="button" onClick={board.restart}>
           방 만들기 화면으로
         </button>
-        {board.code === null ? (
-          <span>방을 만들면 방 코드가 여기에 나와요.</span>
+        {board.outsideUrl === null ? (
+          <span>방을 만들면 방 주소가 여기에 나와요.</span>
         ) : (
-          <span>
-            방 코드 <strong>{board.code}</strong>
+          <span className="room-url">
+            방 주소 <strong>{board.outsideUrl}</strong>
+            {/* 방이 바뀌면 "복사했어요"를 지우도록, 주소를 key로 준다. */}
+            <CopyButton key={board.outsideUrl} text={board.outsideUrl} />
           </span>
         )}
         <button type="button" disabled={board.code === null} onClick={board.joinAll}>
@@ -51,12 +54,8 @@ export function DevBoard() {
         )}
         <p className="hint">
           칸마다 다른 참여자예요.
-          {board.outsideUrl !== null && (
-            <>
-              {' '}
-              다른 브라우저에서 같은 방 열기: <code>{board.outsideUrl}</code>
-            </>
-          )}
+          {board.outsideUrl !== null &&
+            ' 칸 밖에서 같은 방을 열려면 방 주소를 엣지나 크롬 시크릿 창에 붙여 넣으세요. 같은 크롬의 새 탭은 연결 수 제한 때문에 멈출 수 있어요.'}
         </p>
       </header>
 
@@ -98,5 +97,25 @@ export function DevBoard() {
         ))}
       </div>
     </div>
+  )
+}
+
+/** 방 주소 복사. 복사가 막히면(브라우저 권한 등) 주소를 직접 고를 수 있게 창으로 보여준다. */
+function CopyButton({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false)
+
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(text)
+      setCopied(true)
+    } catch {
+      window.prompt('아래 주소를 복사하세요.', text)
+    }
+  }
+
+  return (
+    <button type="button" onClick={() => void copy()}>
+      {copied ? '복사했어요' : '주소 복사'}
+    </button>
   )
 }
